@@ -11,7 +11,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ดาวน์โหลดโมเดล embedding bge-m3 (~2GB) ฝังใน image เลย (กันการโหลดตอน runtime)
+#HelloHelloHello
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 
 # copy โค้ด + laptops.json
