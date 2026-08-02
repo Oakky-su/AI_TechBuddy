@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tech Buddy — AI Notebook Advisor</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- LEFT SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <span class="logo-icon">🤖</span>
+      <span class="logo-text">TechBuddy</span>
+    </div>
+    <div class="rag-badge">
+      <span class="dot"></span>
+      <span>พร้อมให้คำปรึกษา (RAG Active)</span>
+    </div>
+  </div>
+
+  <button class="new-chat-btn" onclick="newChat()">
+    <span>+</span> แชทใหม่
+  </button>
+
+  <div class="history-section">
+    <p class="history-label">ประวัติการสนทนา</p>
+    <div id="historyList">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN CHAT AREA -->
+<main class="chat-area">
+  <div id="messages" class="messages">
+    <div class="msg bot-msg">
+      <div class="avatar bot-avatar">🤖</div>
+      <div class="bubble">
+        สวัสดีครับ! ผม Tech Buddy ผู้ช่วยเลือกโน้ตบุ๊กส่วนตัวของคุณ 😊<br>
+        บอกความต้องการมาได้เลยครับ เช่น <em>"โน้ตบุ๊กเล่นเกม งบ 35,000"</em>
+        หรือ <em>"โน้ตบุ๊กทำงาน ตัดต่อวิดีโอ"</em>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-bar">
+    <label class="attach-btn" title="แนบไฟล์">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+      </svg>
+    </label>
+    <input id="userInput" type="text"
+      placeholder="ถามสเปก หรือการใช้งานที่ต้องการ..."
+      onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendMessage();}"
+    />
+    <button class="send-btn" onclick="sendMessage()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+  <p class="footer-note">Powered by RAG Technology • ข้อมูลจาก Notebook Database Thailand</p>
+</main>
+
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>

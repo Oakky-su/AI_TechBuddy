@@ -1,0 +1,22 @@
+services:
+  teddy:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      # ส่งค่าผ่าน env ตอนรัน (docker compose อ่านจากไฟล์ .env บนเครื่อง host ให้อัตโนมัติ)
+      - THAILLM_API_KEY=${THAILLM_API_KEY}
+      - THAILLM_BASE_URL=${THAILLM_BASE_URL:-http://thaillm.or.th/api/v1}
+      - THAILLM_MODEL=${THAILLM_MODEL:-openthaigpt-thaillm-8b-instruct-v7.2}
+      - DISABLE_THINKING=${DISABLE_THINKING:-false}
+      - SECRET_KEY=${SECRET_KEY:-change-me}
+    # mount โค้ดจากเครื่อง host -> แก้แล้วเห็นผลทันที ไม่ต้อง build ใหม่
+    # ⚠️ ห้ามใช้ ".:/app" (mount ทั้งโฟลเดอร์) เพราะจะบัง /app/chroma_db และ
+    # /app/.cache/huggingface ที่สร้างไว้ตอน build (host ไม่มี 2 อันนี้) -> แอปพัง + โหลดโมเดล 2GB ใหม่
+    volumes:
+      - ./app.py:/app/app.py
+      - ./templates:/app/templates
+      - ./static:/app/static
+    # --reload: gunicorn รีสตาร์ต worker เองเมื่อ app.py เปลี่ยน
+    command: gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 --timeout 120 --reload app:app
+    restart: unless-stopped

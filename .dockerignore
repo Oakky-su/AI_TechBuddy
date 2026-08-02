@@ -1,0 +1,9 @@
+# ห้าม copy secret และไฟล์ที่ไม่จำเป็นเข้า image
+.env
+__pycache__/
+*.pyc
+.git/
+.gitignore
+*.bat
+.cache/
+chroma_db/

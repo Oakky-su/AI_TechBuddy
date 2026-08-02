@@ -1,0 +1,2180 @@
+[
+  {
+    "ลำดับ": 1,
+    "ชื่อสินค้า": "Lenovo Legion 9i 18IAX10-83EY002STA",
+    "ราคา": 166990,
+    "spec": {
+      "CPU": "Intel Core Ultra 9 275HX",
+      "GPU": "NVIDIA GeForce RTX 5090",
+      "RAM": "64 GB DDR5 5200 MHz",
+      "DISPLAY": "18.0 inch (3840x2400) UHD+",
+      "STORAGE": "2TB SSD PCIe M.2 Gen 5",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 49500,
+      "GPU Score": 35500
+    },
+    "reviews": [
+      "โน๊ตบุ๊กแรงที่สุด เครื่อง PC ตั้งโต๊ะยังอาย",
+      "ไม่เหมาะกับคนทั่วไป แต่สำหรับเกมเมอร์มือโปร ครีเอเตอร์ที่ต้องการ desktop replacement ระดับสูงสุด คุ้มมาก ครบทุกอย่าง",
+      "Lenovo Forged Carbon + Legion Spectrum RGB + Legion Coldfront Vapor ระบายความร้อนพัดลมคู่ ดีไซน์เป็น 'ซูเปอร์คาร์โน๊ตบุ๊ก' แต่หนัก พกพายาก"
+    ]
+  },
+  {
+    "ลำดับ": 2,
+    "ชื่อสินค้า": "MSI Raider 16 Max HX B2WJ-094TH",
+    "ราคา": 154990,
+    "spec": {
+      "CPU": "Intel Core Ultra 9 290HX Plus",
+      "GPU": "NVIDIA GeForce RTX 5090",
+      "RAM": "32 GB DDR5 6400 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "2TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 55800,
+      "GPU Score": 35500
+    },
+    "reviews": [
+      "เป็นเรือธงของ MSI สเปกแรงสุดในตลาด สาย Enthusiast",
+      "สีสวยจัด ระบบเสียง Dynaudio เสียงดี vapor chamber cooling ระบายความร้อนชั้นยอด",
+      "ไม่เหมาะกับคนทั่วไป แต่สำหรับเกมเมอร์มืออาชีพ + ครีเอเตอร์ที่ต้องการ desktop replacement ระดับสูงสุด คุ้มในระยะยาว"
+    ]
+  },
+  {
+    "ลำดับ": 3,
+    "ชื่อสินค้า": "MSI Stealth A16 AI+ A3XWIG-226TH",
+    "ราคา": 129990,
+    "spec": {
+      "CPU": "AMD Ryzen AI 9 HX 370",
+      "GPU": "NVIDIA GeForce RTX 5080",
+      "RAM": "64 GB LPDDR5X On Board 7500 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "2TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 35800,
+      "GPU Score": 28500
+    },
+    "reviews": [
+      "ผู้ใช้ Stealth บอกว่าบางและเบา 16 นิ้วเหมาะกับครีเอเตอร์ + เกมเมอร์มืออาชีพ",
+      "Copilot+ PC ready NPU > 50 TOPS รัน AI feature ได้เต็มที่ จอ 16 OLED สีสวย แบตอึดกว่า Stealth Intel ราคาสูงแต่คุ้มสำหรับมืออาชีพ",
+      "MSI Stealth เป็นรุ่นพรีเมียมของ MSI ตัวเครื่อง Mg-Al alloy แข็งแรง บาง คีย์บอร์ดพิมพ์สนุก ลำโพงเสียงดี เหมาะกับงานหนักทุกประเภท"
+    ]
+  },
+  {
+    "ลำดับ": 4,
+    "ชื่อสินค้า": "Lenovo Legion Pro 5 16IAX10H-83LU000VTA",
+    "ราคา": 79990,
+    "spec": {
+      "CPU": "Intel Core Ultra 9 275HX",
+      "GPU": "NVIDIA GeForce RTX 5070 Ti",
+      "RAM": "32 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 49500,
+      "GPU Score": 22500
+    },
+    "reviews": [
+      "เป็น sweet spot ของ Legion Pro 5 family",
+      "สีสวยมาก เหมาะกับเกมเมอร์มืออาชีพ + ครีเอเตอร์ ระบายความร้อน Coldfront Vapor ดีเยี่ยม ใช้งานหนักไม่ throttle",
+      "ไม่เหมาะกับคนทั่วไป แต่ถ้าต้องการสเปกแรงในตัวเครื่องที่บางกว่า Raider/Helios คุ้มมาก ใช้ได้ยาวๆ 5+ ปี"
+    ]
+  },
+  {
+    "ลำดับ": 5,
+    "ชื่อสินค้า": "Lenovo Legion Pro 5 16AFR10-83F2000STA",
+    "ราคา": 71990,
+    "spec": {
+      "CPU": "AMD Ryzen 9 9955HX",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "32 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 52300,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "เป็น sweet spot ของ Legion family ที่คุ้ม",
+      "ในต่างประเทศ Notebookcheck ให้คะแนน 79.6% บอกว่า great performance แต่ราคา confusing เพราะ config หลากหลาย",
+      "เปรียบเทียบกับ ROG Strix G16 ในงบใกล้กัน Legion Pro 5 บิลด์ดีกว่า เครื่องบางกว่า แต่ ROG มี RGB เด่นกว่า เลือกตามรสนิยม"
+    ]
+  },
+  {
+    "ลำดับ": 6,
+    "ชื่อสินค้า": "Asus ROG Strix G16 G615JPR-S5042W",
+    "ราคา": 69990,
+    "spec": {
+      "CPU": "Intel Core i9-14900HX",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "32 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch, QHD (2560 x 1600)",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 46271,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "เป็น ROG ระดับ Strix ขั้นเริ่มต้น ผู้ใช้ชื่นชม design RGB เด่น สเปคแรง",
+      "คุ้มเมื่อเทียบ TUF เพราะได้ design พรีเมียมกว่า ระบบเสียงดีกว่า ตัวเครื่องอลูมิเนียม",
+      "ตัวเครื่องค่อนข้างหนัก 2.8 กก. ใช้เป็น desktop replacement มากกว่าพกพา แบตเตอรี่ใช้ได้ 4-5 ชม. งานทั่วไป เล่นเกมต้องเสียบชาร์จ"
+    ]
+  },
+  {
+    "ลำดับ": 7,
+    "ชื่อสินค้า": "Acer Predator Helios Neo 16S AI OLED PHN16S-71-968P",
+    "ราคา": 63990,
+    "spec": {
+      "CPU": "Intel Core Ultra 9 275HX",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "32 GB DDR5 6400 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 49500,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "จอสวยมาก เหมาะกับครีเอเตอร์",
+      "แล็ปท็อปเกมมิ่งที่ยอดเยี่ยม ประสิทธิภาพสูง พร้อมจอ OLED ขนาดใหญ่สวยงาม ในราคาที่คุ้มค่า",
+      "แล็ปท็อปเกมมิ่งระดับกลางที่คุ้มค่า พร้อมจอ OLED ที่สวยงาม มี AI features เป็น marketing ไม่ใช่จุดเด่นจริง ระวังเรื่อง battery life ที่ไม่ดีเท่าคู่แข่ง MSI Stealth"
+    ]
+  },
+  {
+    "ลำดับ": 8,
+    "ชื่อสินค้า": "MSI Vector 16 HX AI A2XWHG-253TH",
+    "ราคา": 62990,
+    "spec": {
+      "CPU": "Intel Core Ultra 7 255HX",
+      "GPU": "NVIDIA GeForce RTX 5070 Ti",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch, QHD (2560 x 1600)",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 33500,
+      "GPU Score": 22500
+    },
+    "reviews": [
+      "เป็นโน้ตบุ๊กตัวแรง เอาอยู่ทุกเกม สเปกเหลือเฟือ",
+      "Vector series รองเรือธงของ MSI ที่ใช้สเปกเรือธงในตัวเครื่องที่บางกว่า Raider เหมาะกับเกมเมอร์ + ครีเอเตอร์มืออาชีพ",
+      "ราคาสูง ไม่เหมาะกับคนทั่วไป แต่ถ้าเล่นเกมหนัก + ทำงาน 3D Video Editing คุ้มเพราะใช้งานหนักได้ต่อเนื่อง"
+    ]
+  },
+  {
+    "ลำดับ": 9,
+    "ชื่อสินค้า": "HyperX OMEN 15-gb0045AX",
+    "ราคา": 60990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 8745HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "15.3 inch (2880x1800) 2.8K",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 32400,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ใช้เล่นเกม AAA ปรับ Ultra ได้สบาย ทำงาน 3D Blender Maya ก็ไหว เหมือนมี desktop ในกระเป๋า",
+      "เครื่องค่อนข้างหนัก 2.2 กก. พกพาไม่สะดวกถ้าไปไหนนานๆ แต่ระบายความร้อนดีเยี่ยม ไม่ throttle ง่าย เล่น 3-4 ชม. ติดต่อกันเครื่องยังเย็นพอควร",
+      "ลำโพง HyperX Audio + DTS:X เสียงดีกว่าโน้ตบุ๊ก gaming ทั่วไปมาก ดูหนัง ฟังเพลงเพราะกว่าที่คาด แต่ราคา 60K คนงบจำกัดต้องคิดให้รอบคอบ"
+    ]
+  },
+  {
+    "ลำดับ": 10,
+    "ชื่อสินค้า": "Lenovo Legion 5 15IRX10-83LY00HHTA",
+    "ราคา": 58990,
+    "spec": {
+      "CPU": "Intel Core i9-14900HX",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "32 GB DDR5 4800 MHz",
+      "DISPLAY": "15.1 inch (2560x1600) QHD 2K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 46271,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "ใช้ Premiere + เล่นเกมบอกว่าเอาอยู่ทุกงาน",
+      "ระบายความร้อน Coldfront ดีกว่า LOQ ชัดเจน ใช้งานหนัก 3-4 ชม. ไม่ throttle เป็นจุดเด่นของ Legion series ที่ผู้ใช้ชม",
+      "ระวังเรื่อง burn-in ของจอ OLED ถ้าเปิด UI นิ่งนานๆ อย่าง Excel ที่มี header ค้างตลอด ผู้ใช้ OLED แนะนำตั้งเวลา screen saver"
+    ]
+  },
+  {
+    "ลำดับ": 11,
+    "ชื่อสินค้า": "HP OMEN 16-ap0195AX",
+    "ราคา": 54490,
+    "spec": {
+      "CPU": "AMD Ryzen 9 8940HX",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 48500,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "สวย ลำโพง HyperX Audio เสียงดี",
+      "เป็นรุ่นพรีเมียมของ HP gaming บอดี้แข็งแรงกว่า Victus ดีไซน์ Shadow Black เรียบหรู ไม่ดูเป็นเกมมิ่งจัดๆ",
+      "ระวังเรื่องบริการหลังการขายของ HP เช่นเดียวกับ Victus แม้ OMEN จะแพงกว่า แต่บริการก็เหมือนกัน รออะไหล่นาน เครมยาก"
+    ]
+  },
+  {
+    "ลำดับ": 12,
+    "ชื่อสินค้า": "HyperX OMEN 15-ga0093TX",
+    "ราคา": 50990,
+    "spec": {
+      "CPU": "Intel Core i9-14900HX",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.3 inch (2880x1800) 2.8K",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 46271,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "ระบายความร้อนดีจริง เล่นเกมหนัก 3+ ชั่วโมงเครื่องไม่ throttle",
+      "บอดี้ MIL-STD 810H ดูแข็งแรง บานพับนิ่ง พิมพ์ไม่สั่น คีย์บอร์ด RGB 4-zone สวย ปรับได้ ลำโพง HyperX Audio + DTS:X เสียงดี ดูหนังเพราะ",
+      "ข้อสังเกต: เครื่องค่อนข้างหนัก 2.2 กก. พกพาไม่สะดวกถ้าต้องเดินทางบ่อย แต่ถ้าวางบนโต๊ะใช้เป็น desktop replacement คุ้มมาก"
+    ]
+  },
+  {
+    "ลำดับ": 13,
+    "ชื่อสินค้า": "Asus TUF Gaming A18 FA808UH-S9008W",
+    "ราคา": 50990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 260",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "32 GB DDR5 5600 MHz",
+      "DISPLAY": "18.0 inch (2560x1600) QHD 2K",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26000,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "เป็น desktop replacement ตัวจริง จอใหญ่สบายตา",
+      "ตัวเครื่องหนัก 2.6 กก. ไม่เหมาะกับพกพาบ่อย แต่ถ้าใช้เป็น desktop replacement ที่บ้าน/หอ คุ้มมาก จอใหญ่ใช้งานสะดวก",
+      "TUF เดิมๆ พัดลมดัง MIL-STD ทนทาน คีย์บอร์ดมี Number pad ครบ พิมพ์งานสะดวก เหมาะกับสายงานหนัก + เกม"
+    ]
+  },
+  {
+    "ลำดับ": 14,
+    "ชื่อสินค้า": "Lenovo Legion 5a 15AHP11-83Q7001STA",
+    "ราคา": 49990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 250",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.3 inch (2560x1600) 2.5K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 24500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "อัปเกรดจาก LOQ บอกว่าได้ฟีลพรีเมียมกว่ามาก ฟิลดีกว่า",
+      "ระบายความร้อน Coldfront ดีกว่า LOQ ใช้งานหนักไม่ throttle ง่าย ตัวเครื่องอลูมิเนียม แข็งแรง คีย์บอร์ดพิมพ์สนุก ระยะกดดี",
+      "สำหรับเกมเมอร์งบกลาง-สูง คุ้มมาก แต่ระวังเรื่อง config มี variant หลายแบบ ราคาต่างกัน ควรเช็คสเปคให้ละเอียดก่อนซื้อ"
+    ]
+  },
+  {
+    "ลำดับ": 15,
+    "ชื่อสินค้า": "MSI Katana 15 HX B14WFK-416TH",
+    "ราคา": 49990,
+    "spec": {
+      "CPU": "Intel Core i7-14650HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (2560 x 1440) QHD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 34327,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "เรื่อง FPS drop เป็นช่วงๆ ในบางเกม กับเสียง coil whine ต้องอัปเดต BIOS",
+      "Katana ดีไซน์ดาบซามูไร โดดเด่น คีย์บอร์ดมีไฟ RGB สวย ใช้เล่นเกมหนักได้ดี ระบายความร้อน Cooler Boost 5 ทำได้ดีกว่ารุ่น Cyborg/Thin",
+      "ระวังเรื่องประกัน MSI ในไทย รุ่นใหม่ๆ บริการดีขึ้น แต่บางคนยังเจอปัญหา ผู้ใช้แนะนำซื้อจากร้านที่บริการเครมเร็ว"
+    ]
+  },
+  {
+    "ลำดับ": 16,
+    "ชื่อสินค้า": "Lenovo Legion 5 15IRX10-83LY00HJTA",
+    "ราคา": 48990,
+    "spec": {
+      "CPU": "Intel Core i7-14700HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.1 inch (2560x1600) QHD 2K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 38200,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "เปลี่ยนจาก LOQ มาบอกว่าฟีลพรีเมียมขึ้นชัดเจน บิลด์ดี ระบายความร้อนดีกว่า",
+      "จอ OLED 165Hz สีสวยสด แต่ระวังเรื่อง burn-in ถ้าเปิด UI นิ่งนานๆ ผู้ใช้ OLED ทั่วไปแนะนำตั้งเวลา screen saver และไม่เปิดความสว่างสูงสุด",
+      "ในระดับ premium midrange คุ้มสำหรับเกมเมอร์ที่ต้องการสเปกสูง บิลด์ดี ไม่อยากเปลี่ยนเครื่องบ่อย ใช้ได้ยาวๆ 4-5 ปี"
+    ]
+  },
+  {
+    "ลำดับ": 17,
+    "ชื่อสินค้า": "Lenovo Legion 5 15AHP10-83M0000NTA",
+    "ราคา": 48990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 260",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "24 GB DDR5 4800 MHz",
+      "DISPLAY": "15.1 inch (2560x1600) QHD 2K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26000,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ผู้ใช้ AMD บอกว่าแบตอึดกว่า Intel ใช้งานทั่วไป 5-6 ชม.",
+      "น้ำหนักเบาลง 2 กก. นิดๆ งานดีขึ้น เครื่องดูพรีเมียมกว่า LOQ ชัดเจน",
+      "ระวัง burn-in ของจอ OLED ถ้าเปิด UI นิ่งนานๆ ตั้งเวลา screen saver และไม่เปิดความสว่างสูงสุดจะช่วยยืดอายุจอ"
+    ]
+  },
+  {
+    "ลำดับ": 18,
+    "ชื่อสินค้า": "Lenovo Legion 5 15IRX10-83LY00HGTA",
+    "ราคา": 47990,
+    "spec": {
+      "CPU": "Intel Core i7-13650HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.3 inch (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 31633,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "สีสวยมาก แต่ภาพ OLED มีความเสี่ยง burn-in ถ้าเปิด UI นิ่งนานๆ",
+      "ส่วนใหญ่ชื่นชมเรื่องบิลด์คุณภาพดีกว่า LOQ ตัวเครื่องอลูมิเนียมแข็งแรง คีย์บอร์ดพิมพ์สนุก ระบายความร้อน Coldfront ดีกว่ารุ่นล่าง",
+      "ระวังเรื่องราคาที่สับสน Lenovo มี config หลากหลายในรหัสคล้ายกัน บางคน config ดี บางคนได้ config ลด ต้องเช็คสเปคให้ละเอียดก่อนซื้อ"
+    ]
+  },
+  {
+    "ลำดับ": 19,
+    "ชื่อสินค้า": "HP OMEN 16-ap0159AX",
+    "ราคา": 47990,
+    "spec": {
+      "CPU": "AMD Ryzen 9 8940HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 48500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "HP OMEN 16 เป็นรุ่นพรีเมียมของ HP gaming ผู้ใช้ชื่นชมจอ QHD 240Hz คมชัด ลำโพง HyperX Audio เสียงดี ",
+      "บริการหลังการขายช้า รออะไหล่นาน บางครั้งเครื่องเสียในเดือนแรก แนะนำซื้อจากร้านใหญ่ที่เครมเร็ว",
+      "ผู้ใช้ HP OMEN รุ่นเก่าบางคนเจอบานพับโยกหลังใช้ 1-2 ปี ระวังเรื่องการพับและพกพา ไม่ควรยกเครื่องด้วยจอ ควรยกที่ตัวเครื่อง"
+    ]
+  },
+  {
+    "ลำดับ": 20,
+    "ชื่อสินค้า": "HP OMEN 16-am0195TX",
+    "ราคา": 47990,
+    "spec": {
+      "CPU": "Intel Core i7-14650HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 34327,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ลำโพง HyperX Audio เสียงดี เล่นเกมหนักได้ดี แต่ราคาแพงกว่า Victus",
+      "OMEN เป็นรุ่นพรีเมียมของ HP ดีไซน์ Shadow Black เรียบหรู ไม่ดูเป็นเกมมิ่งจัดๆ ใช้ในออฟฟิศได้ บอดี้แข็งแรงกว่า Victus",
+      "ระวังเรื่องบริการหลังการขายของ HP เช่นเดียวกับ Victus แม้ OMEN จะแพงกว่า แต่บริการก็เหมือนกัน รออะไหล่นาน เครมยาก"
+    ]
+  },
+  {
+    "ลำดับ": 21,
+    "ชื่อสินค้า": "Asus TUF Gaming F16 FX608JMR-QT017W",
+    "ราคา": 47990,
+    "spec": {
+      "CPU": "Intel Core i7-14650HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 34327,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ผู้ใช้บอกว่าเป็น sweet spot ของ TUF F16 family ใช้เล่นเกม + ทำงานครบ MIL-STD ทนทาน",
+      "TUF เดิมๆ พัดลมเสียงดัง แต่ระบายความร้อนได้ดี Adaptive-Sync + 100% sRGB ใช้ทำงานกราฟิกได้ดี USB-C charging สะดวก",
+      "ระวังเรื่อง driver และ Armoury Crate ของ Asus อัปเดต BIOS เสมอจะช่วยแก้ปัญหา WiFi และอุปกรณ์ต่อพ่วงไม่ทำงาน"
+    ]
+  },
+  {
+    "ลำดับ": 22,
+    "ชื่อสินค้า": "Asus ZenBook 14 OLED UX3405CA-SILVER769WA",
+    "ราคา": 47990,
+    "spec": {
+      "CPU": "Intel Core Ultra 7 255H",
+      "GPU": "Intel Arc Graphics 140T",
+      "RAM": "16 GB LPDDR5X On Board 7467 MHz",
+      "DISPLAY": "14.0 inch (2880x1800) 2.8K",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 28500,
+      "GPU Score": 5800
+    },
+    "reviews": [
+      "สวยมาก สีจัด ดำสนิท เหมาะกับครีเอเตอร์ที่ต้องการความแม่นยำสี",
+      "น้ำหนัก 1.2 กก. บางเบา พกพาดี แบตอึด 8-10 ชม. ดีไซน์พรีเมียม ได้รางวัล iF Design Award 2025",
+      "ระวัง burn-in ของจอ OLED ถ้าเปิด UI นิ่งนานๆ ตั้งเวลา screen saver และไม่เปิดความสว่างสูงสุด อายุการใช้งานจะยืนนานขึ้น"
+    ]
+  },
+  {
+    "ลำดับ": 23,
+    "ชื่อสินค้า": "HP OMEN 16-ap0119AX",
+    "ราคา": 47990,
+    "spec": {
+      "CPU": "AMD Ryzen AI 7 350",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 25800,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "สวย ลำโพง HyperX Audio เสียงดี เล่นเกมหนักได้ดี",
+      "OMEN เป็นรุ่นพรีเมียมของ HP บอดี้แข็งแรงกว่า Victus ดีไซน์ Shadow Black ดูเรียบหรู ไม่ดูเป็นเกมมิ่งจัดๆ",
+      "ระวังเรื่องบริการหลังการขายของ HP เครมยาก รออะไหล่นาน ผู้ใช้บางคนเจอบานพับโยกหลังใช้ 1-2 ปี"
+    ]
+  },
+  {
+    "ลำดับ": 24,
+    "ชื่อสินค้า": "Asus TUF Gaming A16 FA608UM-QT027W",
+    "ราคา": 47190,
+    "spec": {
+      "CPU": "AMD Ryzen 7 260",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26000,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "สเปกแรงเป็น sweet spot ของ TUF A16 family ใช้เล่นเกม + ทำงาน",
+      "เครื่องค่อนข้างหนัก 2.2 กก. แต่ MIL-STD ทนทาน ระบายความร้อนดี ใช้ต่อเนื่องนานๆ ได้ พัดลมดังเป็นจุดอ่อนของ TUF series",
+      "Asus TUF series มีสองคีย์บอร์ดให้เลือก (เริ่มต้นกับ Optical-mechanical) ผู้ใช้แนะนำลองที่ร้านก่อน เพราะคีย์บอร์ดเป็นจุดที่ใช้บ่อย"
+    ]
+  },
+  {
+    "ลำดับ": 25,
+    "ชื่อสินค้า": "HyperX OMEN 15-ga0000TX",
+    "ราคา": 46990,
+    "spec": {
+      "CPU": "Intel Core i7-14650HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "15.3 inch (2560x1600) 2.5K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 34327,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ระบบระบายความร้อนดีมาก เล่นเกม 3-4 ชั่วโมง ตัวเครื่องยังเย็นกว่าเดิม ไม่ throttle",
+      "แรงพอใช้งาน 3 ปี ขั้นต่ำ แต่อยากให้แบตอึดกว่านี้หน่อย เล่นเกมเหลือแค่ 1 ชม.",
+      "คีย์บอร์ดพิมพ์สนุก ระยะกดดี ไฟ RGB 4-zone สวย ปรับผ่าน OMEN Gaming Hub ได้ ทัชแพดใหญ่ ใช้สะดวก แต่ส่วนใหญ่จะต่อเมาส์เล่นเกมอยู่ดี"
+    ]
+  },
+  {
+    "ลำดับ": 26,
+    "ชื่อสินค้า": "Lenovo LOQ Essential 15IRX11-83SC003GTA",
+    "ราคา": 46990,
+    "spec": {
+      "CPU": "Intel Core i5-13450HX",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25200,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ส่วนใหญ่ชอบเรื่องสเปคต่อราคา แต่บ่นเรื่องคุณภาพการประกอบและ QC ของ Lenovo",
+      "ผู้ใช้รุ่น LOQ ตัวก่อนเจอปัญหาจอกระตุกตอนชาร์จไฟ บางคนจอฟ้า ต้องเครมและรออะไหล่ ระวังให้ดี ควรซื้อจากร้านที่เครมง่าย",
+      "เครื่องดูเรียบหรู ไม่ดูเป็นเกมมิ่งจัดๆ แบบ Asus TUF เอาไปทำงานในออฟฟิศได้ คีย์บอร์ดไฟขาว Number pad ครบ พิมพ์งานสะดวก"
+    ]
+  },
+  {
+    "ลำดับ": 27,
+    "ชื่อสินค้า": "Asus Gaming V16 V3607VP-RP727W",
+    "ราคา": 45990,
+    "spec": {
+      "CPU": "Intel Core 7 240H",
+      "GPU": "NVIDIA GeForce RTX 5070",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26500,
+      "GPU Score": 18500
+    },
+    "reviews": [
+      "เป็น sweet spot ของ Asus V16 series ใช้เล่นเกมหนัก + ทำงาน 3D ได้",
+      "ดีไซน์ Matte Black เรียบหรู ดูเป็นโน๊ตบุ๊กทำงานมากกว่าเกมมิ่งจัดๆ เหมาะกับ professional ที่ต้องการเล่นเกมตอนพักด้วย",
+      "ระวังเรื่อง Armoury Crate และ driver ของ Asus อัปเดต BIOS เสมอจะช่วยแก้ปัญหา WiFi และอุปกรณ์ต่อพ่วงไม่ทำงาน"
+    ]
+  },
+  {
+    "ลำดับ": 28,
+    "ชื่อสินค้า": "Asus TUF Gaming F16 FX608JMR-RV121W",
+    "ราคา": 43990,
+    "spec": {
+      "CPU": "Intel Core i5-14450HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 27500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "เทียบกับ Lenovo Legion 5 ลังเลใจ แต่ TUF ให้ MIL-STD + ทนทานกว่า",
+      "ปัญหาพัดลม TUF ดัง เหมือนรุ่นอื่น แต่ระบายความร้อนได้ดี ใช้งานหนักต่อเนื่องได้นาน คีย์บอร์ด TUF กดติดมือ พิมพ์สนุก",
+      "USB-C charging ช่วยให้พกพาสะดวกขึ้น ไม่ต้องแบก adapter ใหญ่ๆ ทุกที่ เป็นจุดเด่นของรุ่น 2025 ที่ผู้ใช้ชอบ"
+    ]
+  },
+  {
+    "ลำดับ": 29,
+    "ชื่อสินค้า": "HyperX OMEN 15-ga0002TX",
+    "ราคา": 43990,
+    "spec": {
+      "CPU": "Intel Core i5-14450HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.3 inch (2560x1600) 2.5K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 27500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "Tempest Cooling ระบายความร้อนดีจริง เล่นเกมหนักไม่ throttle",
+      "บอดี้ MIL-STD 810H แข็งแรง บานพับนิ่ง คีย์บอร์ด RGB 4-zone สวย ปรับได้ผ่าน OMEN Gaming Hub ลำโพง HyperX Audio เสียงดี",
+      "เครื่องค่อนข้างหนัก 2.2 กก. พกพาไม่สะดวก แต่ถ้าใช้เป็น desktop replacement ที่บ้าน/ห้อง คุ้มมาก เหมาะกับสายงานหนัก"
+    ]
+  },
+  {
+    "ลำดับ": 30,
+    "ชื่อสินค้า": "Acer Nitro V16S AI ANV16S-41-R7HF",
+    "ราคา": 42990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 260",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "16.0 inch (2560x1600) QHD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26000,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "display สวย sound ดี port lineup ครบ แต่เกมไม่แรงเท่าคู่แข่ง",
+      "เป็นรุ่นบางเบาของ Nitro family น้ำหนักเบากว่ารุ่น V15 ใช้พกพาสะดวก เหมาะกับนักศึกษาที่ต้องเดินทางบ่อย ระบายความร้อนพอใช้",
+      "Acer NPU ใน Ryzen AI 350 ทำให้รัน AI feature ได้ แต่ยังไม่ถึงเกณฑ์ Copilot+ PC ของ Microsoft สำหรับคนต้องการ AI หนักๆ ดูรุ่นอื่น"
+    ]
+  },
+  {
+    "ลำดับ": 31,
+    "ชื่อสินค้า": "HyperX OMEN 15-gb0009AX",
+    "ราคา": 41990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 260",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "15.3 inch (2560x1600) 2.5K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26000,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ใช้ Ryzen 7 260 แบตอยู่ดีกว่ารุ่น Intel ใช้งานทั่วไปได้ 6-7 ชั่วโมง จอ 2.5K 180Hz สวยมากเหมือนหน้าจอมือถือ high-end เลย",
+      "ปัญหาเรื่อง driver Adrenalin บ้างเป็นบางครั้ง ต้องอัปเดตให้ทัน แต่โดยรวมเล่นเกมลื่นกว่ารุ่น Intel ในงานหนัก เหมาะกับสายทำงาน 3D + เกม",
+      "เครื่องผ่าน MIL-STD 810H พกพาแบกเป้ไปเรียนได้ ไม่กลัวกระแทกเบาๆ คีย์บอร์ดพิมพ์สนุก แต่ตัวเครื่องค่อนข้างหนาเทียบกับ ultrabook"
+    ]
+  },
+  {
+    "ลำดับ": 32,
+    "ชื่อสินค้า": "MSI Cyborg 15 B2RWFKG-058TH",
+    "ราคา": 41990,
+    "spec": {
+      "CPU": "Intel Core 7 240H",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ดีไซน์โปร่งใส Exoskeletal Cyberpunk ผู้ใช้ชื่นชม design ไม่เหมือนใคร เล่น Valorant ปรับสุดได้ 200-300+ FPS",
+      "ฝาหลังโปร่งแสง สวยล้ำ คีย์บอร์ดมีไฟ WASD เน้นโฟกัสแม่นยำ ระดับเริ่มต้น Cyborg/Thin family ของ MSI ที่นิยม",
+      "เหมือน MSI รุ่นอื่น ระวัง FPS drop ในบางเกม ต้องอัปเดต BIOS และ driver เสมอ เสียงพัดลมดังเวลาเล่นเกมหนัก ใช้ cooling pad ช่วย"
+    ]
+  },
+  {
+    "ลำดับ": 33,
+    "ชื่อสินค้า": "Lenovo LOQ 15IRX10-83JE00MGTA",
+    "ราคา": 40990,
+    "spec": {
+      "CPU": "Intel Core i7-13650HX",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 31633,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "คุ้มมาก เล่น Forza Horizon 5 Cyberpunk ปรับ High ที่ 1440p ได้ 60+ FPS",
+      "จอกระตุกตอนชาร์จ แบตเตอรี่ใช้ได้สั้น บริการ Lenovo ค่อนข้างช้า ระวังเลือกร้านขายและประกัน",
+      "DLSS 4 + Multi Frame Generation ช่วยเพิ่มเฟรมเรตได้เยอะ ผู้ใช้ที่เปิดฟีเจอร์เหล่านี้บอกว่าเล่น 4K ได้ลื่น ดูดี"
+    ]
+  },
+  {
+    "ลำดับ": 34,
+    "ชื่อสินค้า": "Asus TUF Gaming F16 FX608JM-RV008W",
+    "ราคา": 40990,
+    "spec": {
+      "CPU": "Intel Core i5-13450HX",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25200,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "ส่วนใหญ่ชื่นชม MIL-STD-810H บอดี้แข็งแรง คีย์บอร์ดกดติดมือ พิมพ์งานสบาย",
+      "ปัญหาพัดลมดังเป็นจุดอ่อนหลักของ TUF series แทบทุกรุ่น โดยเฉพาะเวลาเสียบชาร์จ ใช้ในออฟฟิศที่ต้องเงียบลำบาก",
+      "Armoury Crate ของ Asus กิน CPU บางคน บางคนแนะนำลบทิ้ง อัปเดต BIOS เสมอจะช่วยแก้ปัญหา WiFi และอุปกรณ์ต่อพ่วงไม่ทำงาน"
+    ]
+  },
+  {
+    "ลำดับ": 35,
+    "ชื่อสินค้า": "HyperX OMEN 15-ga0001TX",
+    "ราคา": 40990,
+    "spec": {
+      "CPU": "Intel Core i5-14450HX",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.3 inch (2560x1600) 2.5K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 27500,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ส่วนใหญ่ชื่นชม Tempest Cooling เล่นเกมหนักไม่ throttle ใช้ต่อเนื่องนานได้",
+      "บอดี้ MIL-STD 810H แข็งแรง บานพับนิ่ง คีย์บอร์ด RGB 4-zone สวย ลำโพง HyperX Audio + DTS:X เสียงดีกว่าโน้ตบุ๊ก gaming ทั่วไป",
+      "เครื่องค่อนข้างหนัก 2.2 กก. พกพาไม่สะดวก แต่ถ้าใช้เป็น desktop replacement ที่บ้าน คุ้มมาก เหมาะกับสายงานหนัก"
+    ]
+  },
+  {
+    "ลำดับ": 36,
+    "ชื่อสินค้า": "HP Victus 15-fb3031AX",
+    "ราคา": 40490,
+    "spec": {
+      "CPU": "AMD Ryzen AI 7 350",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25800,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "อัปเกรดจาก Victus 16 รุ่นเก่าบอกว่าตัวเล็กลง พกพาง่ายขึ้น แต่ระบายความร้อนด้อยกว่ารุ่น 16",
+      "ปัญหาเดียวกับ HP รุ่นอื่น บานพับโยกในรุ่นเก่า บริการช้า รออะไหล่นาน ระวังเลือกร้านขายที่บริการดี",
+      "ลำโพง B&O เสียงดี ดูหนังเพราะกว่าโน๊ตบุ๊ก gaming ทั่วไป แบตเตอรี่ใช้ทำงานทั่วไป 5-6 ชม. ถือว่าโอเคในกลุ่ม gaming laptop"
+    ]
+  },
+  {
+    "ลำดับ": 37,
+    "ชื่อสินค้า": "MSI Cyborg 15 B2RWFKG-059TH",
+    "ราคา": 40490,
+    "spec": {
+      "CPU": "Intel Core 5 210H",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "design Exoskeletal Cyberpunk โปร่งใส ดูล้ำสมัย เล่นเกม eSports ลื่น 200+ FPS",
+      "ระดับ midrange เริ่มต้น ผู้ใช้ MSI Cyborg บ่นเรื่อง FPS drop ในบางเกม ต้องอัปเดต driver",
+      "คีย์บอร์ดมีไฟ WASD เน้นโฟกัส เหมาะกับเกมเมอร์ FPS ลำโพงเสียงเบา ต้องใช้หูฟัง ระบายความร้อนพอใช้ ไม่เด่น แต่ design โดดเด่น"
+    ]
+  },
+  {
+    "ลำดับ": 38,
+    "ชื่อสินค้า": "Asus TUF Gaming F16 FX608JHR-RV094W",
+    "ราคา": 39990,
+    "spec": {
+      "CPU": "Intel Core i5-14450HX",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 27500,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "บอดี้ทนทาน Mecha Gray ดูดี ใช้เล่นเกม + ทำงานได้ครบ ราคา 39K ในระดับ midrange",
+      "เหมือนรุ่น A15 พัดลม TUF ดังเป็นจุดอ่อนหลัก โดยเฉพาะเวลาเสียบชาร์จ ผู้ใช้แนะนำให้ใช้ Armoury Crate ปรับโหมด Silent ในงานเบาๆ",
+      "ระวังเรื่อง driver Asus เคยมีปัญหา WiFi ขาดบ่อย กับ Armoury Crate ที่กิน CPU บางคนต้องลบทิ้ง อัปเดต BIOS เสมอจะช่วยได้"
+    ]
+  },
+  {
+    "ลำดับ": 39,
+    "ชื่อสินค้า": "HP Victus 15-fa2387TX",
+    "ราคา": 39990,
+    "spec": {
+      "CPU": "Intel Core 7 240H",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 26500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "เทียบกับ LOQ บอกว่า Victus จอใหญ่กว่า แต่ Lenovo เครื่องเบากว่า",
+      "เหมือน HP รุ่นอื่น ระวังเรื่องบริการหลังการขายและ QC ผู้ใช้บางคนเจอปัญหาในเดือนแรก ควรเทสครบก่อนหมดประกัน",
+      "ลำโพง B&O ทำให้ดูหนัง ฟังเพลงได้ดีกว่าเกมมิ่งโน๊ตบุ๊คทั่วไป เหมาะกับคนที่ใช้คอมเป็น media center ด้วย"
+    ]
+  },
+  {
+    "ลำดับ": 40,
+    "ชื่อสินค้า": "Asus V16 V3607VM-RP524W",
+    "ราคา": 37990,
+    "spec": {
+      "CPU": "Intel Core 5 210H",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20500,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "จอใหญ่ 16 นิ้ว 144Hz ใช้ทำงาน + เล่นเกม eSports ลื่น",
+      "เน้นความคุ้ม แทน Vivobook Gaming ดีไซน์เรียบกว่า TUF ดูเป็น productivity laptop มากกว่าเกมมิ่งจัดๆ",
+      "ระวังเรื่อง QC ของ Asus เช่นเดียวกับ Vivobook บางผู้ใช้เจอปัญหาเครื่องอืด จอดับ ในช่วงแรก ควรเทสครบก่อนรับเครื่อง"
+    ]
+  },
+  {
+    "ลำดับ": 41,
+    "ชื่อสินค้า": "Lenovo LOQ 15IRX9-83DV01A1TA",
+    "ราคา": 37490,
+    "spec": {
+      "CPU": "Intel Core i7-13650HX",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 31633,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "จอกระตุกเวลาชาร์จ ตอนไม่ชาร์จเล่น Genshin/Wuthering Waves ลื่นปกติ แต่เฟรมเรตต่ำลง",
+      "เป็นเกมมิ่งโน๊ตบุ๊ก ระบายความร้อนพอใช้ ไม่ถึงขนาดดีเด่น แต่ก็ไม่ร้อนเกินไป คีย์บอร์ด Number pad ครบ พิมพ์งานสะดวก",
+      "ผู้ใช้ LOQ บ่นเรื่องบริการ Lenovo ที่ค่อนข้างช้า รออะไหล่นาน บางคนต้องส่งหลายรอบ ระวังเลือกร้านที่บริการหลังการขายดี"
+    ]
+  },
+  {
+    "ลำดับ": 42,
+    "ชื่อสินค้า": "Gigabyte GAMING A16-CVHI3TH893SH",
+    "ราคา": 36990,
+    "spec": {
+      "CPU": "Intel Core i7-13620H",
+      "GPU": "NVIDIA GeForce RTX 5060",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25686,
+      "GPU Score": 14500
+    },
+    "reviews": [
+      "design ดี cooling ดี แต่ TGP ต่ำกว่าคู่แข่ง เฟรมเรตจะด้อยกว่า",
+      "ในไทย Gigabyte gaming notebook ยังไม่นิยมเท่า MSI/Asus/Acer/Lenovo รีวิวผู้ใช้ในไทยมีน้อย แต่บริการของ Gigabyte ค่อนข้างจำกัด",
+      "ตัวเครื่อง Black Steel ดูพรีเมียม ดีไซน์ Golden Curve keyboard โค้งรับนิ้ว WINDFORCE cooling พัดลมคู่ 3D VortX ระบายความร้อนได้ดี"
+    ]
+  },
+  {
+    "ลำดับ": 43,
+    "ชื่อสินค้า": "HP Victus 15-fa2306TX",
+    "ราคา": 36990,
+    "spec": {
+      "CPU": "Intel Core i7-13620H",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25686,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "เป็น sweet spot ของ Victus 15 family ใช้เล่นเกม + ทำงานได้ครบ",
+      "เหมือน HP รุ่นอื่น ระวังเรื่องบริการหลังการขายและ QC ผู้ใช้บางคนเจอจอฟ้า RAM เสียในเดือนแรก ควรเทสครบก่อนหมดประกัน",
+      "ลำโพง B&O เสียงดี ดูหนังเพราะ แบตเตอรี่ใช้ทำงานทั่วไป 5-6 ชม. ระบายความร้อนพอใช้ ไม่เด่น แต่ราคาคุ้ม"
+    ]
+  },
+  {
+    "ลำดับ": 44,
+    "ชื่อสินค้า": "Asus TUF Gaming F16 FX608JH-RV002W",
+    "ราคา": 35990,
+    "spec": {
+      "CPU": "Intel Core i5-13450HX",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25200,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "เป็นรุ่น budget ของ TUF F16 family ใช้เล่นเกม eSports + AAA ปรับ Medium ได้ดี",
+      "เหมือน TUF รุ่นอื่นๆ พัดลมเสียงดัง แต่ MIL-STD ทนทาน ราคาไม่แพง เหมาะกับคนเข้าเกมมิ่งครั้งแรก หรืออัปเกรดจากเครื่องเก่า",
+      "Adaptive-Sync + 100% sRGB ใช้ทำงานกราฟิกเบาๆ ได้ดี USB-C charging ช่วยให้พกพาสะดวกขึ้น เป็นจุดเด่นของรุ่น 2025"
+    ]
+  },
+  {
+    "ลำดับ": 45,
+    "ชื่อสินค้า": "Lenovo LOQ 15AHP10-83JG0054TA",
+    "ราคา": 34990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 250",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 24500,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ใช้เล่น Wuthering Waves Genshin Impact ปรับ High ลื่นมาก ที่ 60+ FPS แต่ถ้าไม่เสียบชาร์จเฟรมเรตจะตกครึ่งหนึ่ง",
+      "แบตเตอรี่ค่อนข้างเปลือง ทำงานทั่วไปได้แค่ 3-4 ชม. ถ้าเล่นเกมต้องเสียบชาร์จตลอด นี่เป็นจุดอ่อนหลักของ Lenovo LOQ ที่ผู้ใช้บ่นบ่อย",
+      "คีย์บอร์ด Number pad ครบ พิมพ์งานสะดวก ดีไซน์ดูดี เอาไปทำงานในออฟฟิศไม่เคอะเขิน ระบายความร้อนพอใช้ ไม่เด่นแต่ก็ไม่ร้อนเกินไป"
+    ]
+  },
+  {
+    "ลำดับ": 46,
+    "ชื่อสินค้า": "HP Victus 16-r0356TX",
+    "ราคา": 33990,
+    "spec": {
+      "CPU": "Intel Core i5-13500HX",
+      "GPU": "NVIDIA GeForce RTX 4060",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "16.1 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 23145,
+      "GPU Score": 10500
+    },
+    "reviews": [
+      "ถือว่าคุ้มที่สุดในตลาดตอนนั้น แต่เครื่องค่อนข้างใหญ่และหนัก พกพาไปไหนต้องใส่กระเป๋าใหญ่",
+      "ระวังเรื่องบริการหลังการขาย HP มีผู้ใช้บ่นว่าเครมยาก รออะไหล่นาน บางคนถึงขั้นเครื่องเสียในเดือนแรก จอฟ้า ติดลูป auto repair ควรซื้อจากร้านที่เชื่อถือได้",
+      "หน้าจอ 16 นิ้ว ใหญ่สบายตา ลำโพง B&O เสียงดี แบตเตอรี่อยู่ได้ 6-7 ชม. ทำงานทั่วไป SD card reader มีให้ใช้สะดวก"
+    ]
+  },
+  {
+    "ลำดับ": 47,
+    "ชื่อสินค้า": "Lenovo IdeaPad Slim 5 16IAH10-83ND000QTA",
+    "ราคา": 33990,
+    "spec": {
+      "CPU": "Intel Core Ultra 7 255H",
+      "GPU": "Intel Arc Graphics 140T",
+      "RAM": "24 GB DDR5 4800 MHz",
+      "DISPLAY": "16.0 inch (2880x1800) 3K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 28500,
+      "GPU Score": 5800
+    },
+    "reviews": [
+      "ซื้อมาทำงาน Office ตัดต่อวิดีโอเบาๆ สวยจัด สีสด ดำสนิท เหมาะกับครีเอเตอร์ ลำโพง Dolby Atmos เสียงดีกว่า IdeaPad ทั่วไป",
+      "แบตเตอรี่อึดมากๆ ใช้งานทั่วไปได้ 8-9 ชั่วโมง ใช้เรียนทั้งวันไม่ต้องชาร์จ Ryzen NPU ช่วยให้ AI feature ทำงานเร็ว ตัวเครื่องบาง 17.2 มม. พกพาดี",
+      "ข้อกังวล: ผู้ใช้ Lenovo IdeaPad รุ่นเก่าบางคนเจอปัญหา Lenovo Vantage ขึ้นมาเอง บางคนเจอ จอ 13 นิ้ว ค้าง ต้องลง Windows ใหม่ ระวังเลือก QC"
+    ]
+  },
+  {
+    "ลำดับ": 48,
+    "ชื่อสินค้า": "Asus TUF Gaming A16 FA607NUQ-RL009W",
+    "ราคา": 33990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 170",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 21000,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ขนาด workspace ใหญ่กว่ารุ่น 15 เหมาะกับทำงาน + เล่นเกม",
+      "พัดลมเสียงดังเป็นจุดอ่อน แต่ระบายความร้อนได้ดี ใช้งานต่อเนื่องนานได้ บอดี้ MIL-STD ทนทาน",
+      "จัดเป็น sweet spot ของ midrange เกมมิ่ง ผู้ใช้ Asus ส่วนใหญ่พอใจ แต่บางคนเจอปัญหา BIOS update ต้องระวัง"
+    ]
+  },
+  {
+    "ลำดับ": 49,
+    "ชื่อสินค้า": "Asus TUF Gaming F16 FX607VU-RV058W",
+    "ราคา": 33990,
+    "spec": {
+      "CPU": "Intel Core 5 210H",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20500,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "แรงเหลือ เล่นเกม AAA ที่ 1080p ปรับ Ultra ได้สบาย",
+      "MUX Switch + NVIDIA Advanced Optimus ช่วยเพิ่มประสิทธิภาพการเล่นเกมและประหยัดแบตเวลาทำงาน ผู้ใช้ที่รู้จักเปิดใช้บอกว่าดีจริง",
+      "เหมือน TUF อื่นๆ พัดลมดัง บอดี้ใหญ่ น้ำหนัก 2.2 กก. แต่ทนทาน MIL-STD-810H พกพาไปไหนไม่กลัวพัง"
+    ]
+  },
+  {
+    "ลำดับ": 50,
+    "ชื่อสินค้า": "HP Victus 15-fb3034AX",
+    "ราคา": 32990,
+    "spec": {
+      "CPU": "AMD Ryzen AI 5 340",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 22500,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ถือว่าถูกที่สุดในตลาดสำหรับ RTX 50 series ใช้เล่นเกม FPS MOBA ลื่น แต่เกม AAA ต้องลด preset",
+      "เครื่องเล็กกว่ารุ่น 16 บอดี้พลาสติก กดแล้วยุบเล็กน้อย ระบายความร้อนพอใช้ ไม่เด่น",
+      "เช่นเดียวกับ HP รุ่นอื่น ระวังเรื่องบริการหลังการขายและ QC ผู้ใช้บางคนเจอจอฟ้า RAM เสีย ในเดือนแรก ควรเทสครบก่อนหมดประกัน"
+    ]
+  },
+  {
+    "ลำดับ": 51,
+    "ชื่อสินค้า": "Asus V16 V3607VH-RP521W",
+    "ราคา": 32990,
+    "spec": {
+      "CPU": "Intel Core 5 210H",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20500,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ใช้งานทั่วไป + เล่นเกมเบาๆ ลื่นดี เหมาะกับนักเรียน นักศึกษา",
+      "ดีไซน์ Matte Black ดูเรียบหรู ตัวเครื่องบางกว่ารุ่น TUF Gaming เหมาะถ้าต้องการเครื่องเอาไปทำงานได้ ไม่อยากดูเป็นเกมเมอร์",
+      "RTX 3050 ในปี 2026 จัดเป็นการ์ดจอเก่าแล้ว เล่นเกมใหม่ๆ ต้องลด preset ลงเยอะ ถ้ามีงบเพิ่ม 5K อาจไปดูรุ่นที่ได้ RTX 4050/5050 จะคุ้มกว่า"
+    ]
+  },
+  {
+    "ลำดับ": 52,
+    "ชื่อสินค้า": "Lenovo IdeaPad Slim 5 16AKP10-83HY004ATA",
+    "ราคา": 32990,
+    "spec": {
+      "CPU": "AMD Ryzen AI 7 350",
+      "GPU": "AMD Radeon 860M",
+      "RAM": "32 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2880x1800) 3K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25800,
+      "GPU Score": 5200
+    },
+    "reviews": [
+      "ใช้ที่ทำงาน Office + ตัดต่อเบาๆ ชอบจอ OLED 2K สีสด ลำโพง Dolby Atmos เสียงดี แบตอึด 8-9 ชม",
+      "ตัวเครื่องบาง 17.2 มม. น้ำหนัก 1.8 กก. พกพาดี ดีไซน์เรียบหรู เอาไปทำงานในร้านกาแฟไม่เคอะเขิน MIL-STD 810H อุ่นใจ",
+      "ระวังเรื่อง Lenovo Vantage ที่ขึ้นมาเองและกิน RAM บางคนแนะนำลบทิ้ง ลง Windows ใหม่จะลื่นกว่า สำหรับสายทำงานจริงจัง"
+    ]
+  },
+  {
+    "ลำดับ": 53,
+    "ชื่อสินค้า": "Asus TUF Gaming A16 FA607NUG-RL116W",
+    "ราคา": 32990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7445HS",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25100,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ใช้ที่ทำงาน + เล่นเกม ชื่นชม workspace ใหญ่ ทำ multitasking ง่ายขึ้น",
+      "เล่นเกม AAA ปรับสูงได้ที่ 1080p ลื่น แต่ที่ 1440p ต้องลด preset บ้าง แบตอึดกว่ารุ่น Intel เล็กน้อย",
+      "TUF เดิมๆ พัดลมดัง แต่ทนทาน MIL-STD ผ่านมาตรฐาน ผู้ใช้ TUF หลายคนใช้ไป 3-4 ปีก็ยังไม่พัง ถ้ายอมรับเรื่องเสียงได้คุ้ม"
+    ]
+  },
+  {
+    "ลำดับ": 54,
+    "ชื่อสินค้า": "Lenovo LOQ 15IRX9-83DV00LETA",
+    "ราคา": 32990,
+    "spec": {
+      "CPU": "Intel Core i5-13450HX",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "24 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 25200,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ใช้เรียนวิศวะ + เล่นเกม ตัดต่อทั่วไป ใช้งานยาวๆ ได้ลื่น แต่แบตอึดไม่นาน",
+      "เครื่องร้อนเวลาใช้งานหนัก แนะนำซื้อ cooling pad ช่วย ตั้งโหมด Performance ใน Lenovo Vantage จะช่วยได้แต่พัดลมจะดังขึ้น",
+      "เปรียบเทียบกับ MSI Katana A17 + MacBook Air M3 ในงบใกล้กัน Pantip ผู้ใช้แนะนำ LOQ ถ้าเน้นเล่นเกม + ทำงานเขียนโปรแกรม"
+    ]
+  },
+  {
+    "ลำดับ": 55,
+    "ชื่อสินค้า": "MSI Cyborg 15 B13WEKG-465TH",
+    "ราคา": 32990,
+    "spec": {
+      "CPU": "Intel Core i7-13620H",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25686,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "เป็นรุ่น sweet spot ของ Cyborg family ดีไซน์ Cyberpunk โดดเด่น",
+      "MSI Cyborg 15 A13VFK-873TH เกมมิ่งโน๊ตบุ๊คงบไม่ถึงสี่หมื่น Intel Core i7-13620H + RTX4060 ผู้ใช้ Pantip ชื่นชม",
+      "MSI Cyborg ใช้คีย์บอร์ด single-zone backlight ไม่มี RGB 4-zone แบบรุ่นพี่ ระบายความร้อนพอใช้ แต่ FPS drop ในบางเกม"
+    ]
+  },
+  {
+    "ลำดับ": 56,
+    "ชื่อสินค้า": "Acer Nitro V 15 ANV15-52-73BK",
+    "ราคา": 31990,
+    "spec": {
+      "CPU": "Intel Core i7-13620H",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25686,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ใช้เล่นเกม PUBG Valorant ได้ลื่นดี เฟรมเรตนิ่ง 100+ FPS ส่วนตัวคุ้มมากในงบสามหมื่น แต่ตอนเล่นเกมหนักๆ พัดลมจะดังเอาเรื่อง ต้องใช้หูฟัง",
+      "ซื้อมาเรียนวิศวะ ใช้ทั้งทำงาน Solidwork AutoCAD และเล่นเกมตอนพักด้วย เครื่องร้อนพอควรเวลาใช้หนัก แต่ระบายความร้อนดีกว่าที่คิด ประกัน 3 ปี Onsite อุ่นใจ",
+      "ข้อสังเกตจากผู้ใช้รุ่นใกล้เคียง: ช่องระบายลมเป่าตรงหน้าจอนานๆ อาจทำให้บานพับร้อน คีย์บอร์ดไฟ RGB สวย กดติดมือ ตัวเครื่องดูบึกบึน ไม่บอบบาง"
+    ]
+  },
+  {
+    "ลำดับ": 57,
+    "ชื่อสินค้า": "Lenovo LOQ 15ARP9-83JC003NTA",
+    "ราคา": 31990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7435HS",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "24 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 23500,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "เล่นเกม + ทำงานได้ดี ระดับ midrange เริ่มต้น",
+      "ปัญหา LOQ เดิมจอกระตุกตอนชาร์จ แบตเตอรี่อึดไม่นานเล่นเกม บริการ Lenovo ค่อนข้างช้า เลือกร้านขายดี",
+      "Notebookcheck ให้คะแนน LOQ 15ARP9 Intel sibling 'good (79%)' AMD variant คาดว่าคะแนนใกล้กัน คุ้มในระดับ midrange"
+    ]
+  },
+  {
+    "ลำดับ": 58,
+    "ชื่อสินค้า": "Asus TUF Gaming A15 FA507NUR-LP037W",
+    "ราคา": 30990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7435HS",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 23500,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "สเปคต่อราคา และ MIL-STD-810H ทนทาน แต่ตัวเครื่องค่อนข้างหนา",
+      "มีปัญหาบ่อย ทั้ง WiFi ขาด จอเป็นเส้น อุปกรณ์ USB ไม่ทำงาน ต้อง troubleshoot driver บ่อย",
+      "พัดลม TUF ดังเอาเรื่อง เหมือนรุ่น TUF อื่นๆ ผู้ใช้บางคนแนะนำเปลี่ยน thermal paste หลังใช้ 2-3 ปี ช่วยลดอุณหภูมิและเสียงพัดลมได้"
+    ]
+  },
+  {
+    "ลำดับ": 59,
+    "ชื่อสินค้า": "Asus V16 V3607VU-RP596W",
+    "ราคา": 30990,
+    "spec": {
+      "CPU": "Intel Core 5 210H",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20500,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ใช้งานทั่วไปลื่น เล่นเกม eSports + AAA preset Medium ได้สบาย",
+      "เป็นซีรีส์ใหม่ของ Asus ที่ถูกออกแบบมาแทน Vivobook Gaming เน้นความคุ้ม ดีไซน์ Matte Black เรียบหรู ดูเป็นโน๊ตบุ๊กทำงาน",
+      "ระวังเรื่อง driver และ Armoury Crate ของ Asus ที่บางครั้งกิน CPU ผู้ใช้บางคนแนะนำลบและใช้ MyAsus แทน อัปเดต BIOS เสมอจะช่วย"
+    ]
+  },
+  {
+    "ลำดับ": 60,
+    "ชื่อสินค้า": "Asus Vivobook S16 S3607CA-RP719WA",
+    "ราคา": 30990,
+    "spec": {
+      "CPU": "Intel Core Ultra 7 255H",
+      "GPU": "Intel Arc Graphics 140T",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 28500,
+      "GPU Score": 5800
+    },
+    "reviews": [
+      "ผู้ใช้ที่ใช้ทำงานครีเอเตอร์บอกว่าจอ OLED สีสวย ทำงาน Photoshop Lightroom ดี",
+      "รัน AI feature ของ Copilot+ PC ได้ แบตอึด ใช้งานทั่วไป 8-9 ชม. ตัวเครื่องบาง พกพาดี",
+      "ระวังเรื่อง Asus Vivobook ที่บางครั้งมีปัญหา QC ตรวจสอบที่ร้านก่อนรับ ผู้ใช้บางคนเจอจอเป็นเส้น เครื่องอืด ในสัปดาห์แรก"
+    ]
+  },
+  {
+    "ลำดับ": 61,
+    "ชื่อสินค้า": "Acer Nitro V 15 ANV15-51-56QE",
+    "ราคา": 30990,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 4060",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 10500
+    },
+    "reviews": [
+      "ใช้เล่นเกม + ทำงานได้ลื่น Intel + RTX series",
+      "ปัญหาเดียวกับ Nitro V อื่นๆ: พัดลมดังเวลาเล่นเกมหนัก ช่องลมเป่าหน้าจอ ระวังเรื่องการพับ บานพับร้อนตอนใช้งานนานๆ",
+      "บางคนบ่นว่าทำไม Nitro V 15 ANV15-51-574G ถึงนิยมกว่ารุ่นย่อยอื่นในรหัสเดียวกัน ทั้งที่สเปคเหมือนกัน ส่วนใหญ่เพราะ marketing/availability"
+    ]
+  },
+  {
+    "ลำดับ": 62,
+    "ชื่อสินค้า": "Acer Nitro V 15 ANV15-52-501P",
+    "ราคา": 29990,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 5050",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 11500
+    },
+    "reviews": [
+      "ใช้เรียน + เล่นเกมไปด้วย ตัดต่อ Premiere งานเบาๆ ก็ลื่น แต่ถ้าใส่ effect เยอะๆ จะร้อน",
+      "ปัญหาเดียวคือเสียงพัดลมตอนเล่นเกมหนัก กับช่องลมร้อนเป่าใต้หน้าจอ ทำให้ใช้นานๆ บานพับอาจร้อนได้ ควรซื้อ cooling pad เสริม",
+      "คีย์บอร์ดมีไฟ backlit สีแดงสวย ทัชแพดใช้ได้ แบตเตอรี่ 4-5 ชม. เวลาใช้ทั่วไป ถ้าเล่นเกมเหลือแค่ 1.5-2 ชม. ต้องเสียบชาร์จเล่นตลอด"
+    ]
+  },
+  {
+    "ลำดับ": 63,
+    "ชื่อสินค้า": "HP Victus 15-fb3086AX",
+    "ราคา": 29990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7445HS",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25100,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "คุ้มในระดับเริ่มต้น เล่นเกม eSports ลื่น เกม AAA preset Medium ก็ไหว",
+      "ปัญหาบริการช้า รออะไหล่นาน เครื่องเสียในเดือนแรก ระวังเลือกร้านขายที่บริการดี",
+      "ตัวเครื่องดูดี ลำโพง B&O เสียงดี แต่บอดี้พลาสติก กดแล้วยุบเล็กน้อย ระวังเรื่องการพับและพกพา ใส่กระเป๋ามีฟองน้ำดี"
+    ]
+  },
+  {
+    "ลำดับ": 64,
+    "ชื่อสินค้า": "MSI Cyborg 15 AI A1VFK-247TH",
+    "ราคา": 29990,
+    "spec": {
+      "CPU": "Intel Core Ultra 5 135H",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18500,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ชื่นชม design Cyberpunk ตัวเครื่องโปร่งใส ไม่เหมือนใคร",
+      "เหมาะกับเกมเมอร์งบกลาง เล่น eSports + AAA preset Medium ได้ดี ดีไซน์ดูดีกว่ารุ่นใกล้ราคา",
+      "เหมือน MSI รุ่นอื่น ระวัง FPS drop ในบางเกม อัปเดต BIOS และ driver เสมอจะช่วย เสียงพัดลมดังเวลาเล่นเกมหนัก"
+    ]
+  },
+  {
+    "ลำดับ": 65,
+    "ชื่อสินค้า": "Acer Nitro V 15 ANV15-42-R015",
+    "ราคา": 28990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7445HS",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25100,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "แบรนด์ AMD แบตอึดกว่ารุ่น Intel เล็กน้อย ใช้งานทั่วไปได้ 5-6 ชม",
+      "ปัญหาที่เจอเดียวกันคือพัดลมดังเวลาเล่นเกม กับช่องลมร้อนเป่าตรงบานพับ ระวังให้เครื่องอยู่บนพื้นเรียบ ไม่ให้บนเตียงเพราะอุดช่องลม",
+      "Acer NitroSense ปรับโหมดพัดลม Performance/Auto/Silent ได้ ผู้ใช้แนะนำให้ตั้งเป็น Auto จะเงียบขึ้นเวลาทำงานทั่วไป เปลี่ยน Performance เฉพาะเล่นเกม"
+    ]
+  },
+  {
+    "ลำดับ": 66,
+    "ชื่อสินค้า": "Asus Vivobook S16 S3607CA-RP720WA",
+    "ราคา": 28990,
+    "spec": {
+      "CPU": "Intel Core Ultra 7 255H",
+      "GPU": "Intel Arc Graphics 140T",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 28500,
+      "GPU Score": 5800
+    },
+    "reviews": [
+      "จอ OLED สีสวย ทำงาน Office + ตัดต่อเบาๆ ได้ดี แบตอึด ตัวเครื่องบาง พกพาดี",
+      "รัน AI feature ของ Copilot+ PC ได้ ใช้งานทั่วไป 8-9 ชม. ตัวเครื่องบาง 17.2 มม.",
+      "ระวังเรื่อง QC ของ Asus Vivobook ตรวจสอบที่ร้านก่อนรับ ผู้ใช้บางคนเจอจอเป็นเส้น เครื่องอืด ในสัปดาห์แรก"
+    ]
+  },
+  {
+    "ลำดับ": 67,
+    "ชื่อสินค้า": "Lenovo LOQ 15ARP9-83JC00LGTA",
+    "ราคา": 27990,
+    "spec": {
+      "CPU": "AMD Ryzen 5 7235HS",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 19200,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "จอกระตุกตอนชาร์จ เหมือนรุ่น LOQ อื่นๆ แต่ตอนใช้ปกติเล่นเกมได้ดี",
+      "ใช้งานทั่วไปได้ 5-6 ชม แต่เล่นเกมเหลือแค่ 1.5-2 ชม ต้องเสียบชาร์จเสมอ",
+      "ระวังเรื่องบริการ Lenovo ที่ค่อนข้างช้า รออะไหล่นาน ผู้ใช้บางคนถูกเซลตามไม่ตรงปก ระวังตรวจสเปคก่อนรับเครื่อง"
+    ]
+  },
+  {
+    "ลำดับ": 68,
+    "ชื่อสินค้า": "Acer Nitro Lite 16 NL16-71G-50BY",
+    "ราคา": 27990,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "สีแดง Tigerlily สวยไม่เหมือนใคร โดดเด่น",
+      "เป็นรุ่นบางเบาของ Nitro family ดีไซน์เรียบกว่า Nitro V15 ดูเป็นโน๊ตบุ๊กทำงานมากกว่า เอาไปทำงานในออฟฟิศได้",
+      "ระวังเรื่องเสียงพัดลม Acer ตอนเล่นเกมหนัก เหมือนรุ่น Nitro อื่นๆ ผู้ใช้แนะนำตั้ง NitroSense เป็น Auto จะเงียบขึ้น"
+    ]
+  },
+  {
+    "ลำดับ": 69,
+    "ชื่อสินค้า": "Acer Nitro Lite 16 NL16-71G-576Y",
+    "ราคา": 26990,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ใหญ่สบายตา ใช้ทำงาน + เล่นเกมได้ดี เป็นคู่แข่ง LOQ ที่น่าสนใจ",
+      "เป็นโน๊ตบุ๊กทำงานมากกว่า เหมาะกับคนที่ต้องการเล่นเกมแต่ไม่อยากดูเป็นเกมเมอร์จัดๆ",
+      "ระวังเรื่องเสียงพัดลม Acer ตอนเล่นเกมหนัก เหมือนรุ่น Nitro อื่นๆ ผู้ใช้แนะนำตั้ง NitroSense เป็น Auto จะเงียบขึ้น"
+    ]
+  },
+  {
+    "ลำดับ": 70,
+    "ชื่อสินค้า": "HP Victus 15-fb3087AX",
+    "ราคา": 26990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7445HS",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25100,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ใช้เล่นเกม eSports + AAA preset Medium ได้ดี ระดับ entry-level gaming",
+      "ตัวเครื่องดีไซน์ใหม่ ไม่ดูเป็นเกมมิ่งจัดๆ ใช้ในออฟฟิศได้ ลำโพง B&O เสียงดี แต่บอดี้พลาสติก กดแล้วยุบเล็กน้อย",
+      "ระวังเรื่องบริการหลังการขายของ HP เช่นเดียวกับ Victus อื่นๆ ผู้ใช้บางคนเจอจอฟ้า RAM เสียในเดือนแรก ควรเทสครบก่อนหมดประกัน"
+    ]
+  },
+  {
+    "ลำดับ": 71,
+    "ชื่อสินค้า": "Asus Vivobook 16 X1607AA-MB508WA",
+    "ราคา": 26990,
+    "spec": {
+      "CPU": "Intel Core Ultra 5 325",
+      "GPU": "Intel Graphics 4 Xe3 Panther Lake iGPU",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20800,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ใช้ทำงาน + ดูหนังสบาย ตัวเครื่อง premium ดู ดีกว่า Vivobook 15 ทั่วไป",
+      "ระวังเรื่อง QC ของ Asus Vivobook มีผู้ใช้บางคนเจอปัญหาเครื่องอืดในสัปดาห์แรก จอดับ ต้องเครม ก่อนซื้อควรเทสที่ร้าน",
+      "ลำโพงเสียงเบา คีย์บอร์ดพิมพ์โอเค Number pad ครบ แบตเตอรี่ 5-6 ชม. ใช้งานทั่วไป ในระดับราคาถือว่าโอเค"
+    ]
+  },
+  {
+    "ลำดับ": 72,
+    "ชื่อสินค้า": "Lenovo IdeaPad Slim 5 16AKP10-83HY008UTA",
+    "ราคา": 26990,
+    "spec": {
+      "CPU": "AMD Ryzen AI 5 330",
+      "GPU": "AMD Radeon 820M",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch (2880x1800) 3K",
+      "STORAGE": "1TB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20100,
+      "GPU Score": 3200
+    },
+    "reviews": [
+      "จอสวย ใช้งาน Office + ตัดต่อเบาๆ ได้ดี แบตอึด 8-9 ชม.",
+      "ตัวเครื่องบาง 17.2 มม. น้ำหนัก 1.8 กก. พกพาดี ดีไซน์เรียบหรู เอาไปทำงานในร้านกาแฟไม่เคอะเขิน",
+      "ระวังเรื่อง Lenovo Vantage ที่ขึ้นมาเองและกิน RAM บางคนแนะนำลบทิ้ง ลง Windows ใหม่จะลื่นกว่า สำหรับสายทำงานจริงจัง"
+    ]
+  },
+  {
+    "ลำดับ": 73,
+    "ชื่อสินค้า": "Asus TUF Gaming A15 FA506NCQ-HN013W",
+    "ราคา": 25990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 170",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 21000,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ใช้เล่นเกม + ทำงาน ระดับเริ่มต้น ตัวเครื่องผ่าน MIL-STD แข็งแรงทนทาน เคยทำตกไม่สูงมาก ยังใช้ได้ปกติ บอดี้รู้สึกบึกบึนกว่ารุ่นทั่วไป",
+      "ปัญหาที่ผู้ใช้ TUF บ่นมากที่สุดคือเสียงพัดลมดังมาก โดยเฉพาะเวลาเสียบชาร์จ แม้แต่เปิดแค่ Chrome กับโปรแกรมพื้นฐานพัดลมก็ยังดัง",
+      "ผู้ใช้บางคนเจอปัญหา WiFi ตัดเอง อุปกรณ์ USB ไม่ทำงานบางจังหวะ ต้อง troubleshoot driver ระวังเลือกเครื่องที่อัปเดต BIOS แล้ว"
+    ]
+  },
+  {
+    "ลำดับ": 74,
+    "ชื่อสินค้า": "Lenovo LOQ 15IRX9-83DV01A0TA",
+    "ราคา": 25990,
+    "spec": {
+      "CPU": "Intel Core i5-13450HX",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 25200,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ใช้เรียน + เล่นเกม Cyberpunk RDR 2 ปรับ Medium ได้ลื่น 60+ FPS แต่ลด preset ลงเฟรมเรตจะนิ่งขึ้น",
+      "ส่วนใหญ่บ่นเรื่องแบตเตอรี่อึดไม่นาน 2-3 ชั่วโมงเล่นเกม กับเครื่องร้อนเวลาใช้งานหนัก ควรซื้อ cooling pad เสริม",
+      "Lenovo Vantage มีฟีเจอร์ปรับโหมด Performance ช่วยได้บ้าง แต่ก็ทำให้เสียงพัดลมดังขึ้น คีย์บอร์ด Number pad ครบ เหมาะกับงานเอกสาร + เกม"
+    ]
+  },
+  {
+    "ลำดับ": 75,
+    "ชื่อสินค้า": "Asus TUF Gaming A15 FA506NCG-HN184W",
+    "ราคา": 25990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7445HS",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25100,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "เป็นรุ่น budget ของ TUF family เริ่มเข้าเกมมิ่งครั้งแรก",
+      "MIL-STD-810H ทนทาน ตัวเครื่องดูบึกบึน เหมาะกับนักศึกษาที่ต้องการเล่นเกม + ใช้เรียน ราคาเข้าถึงง่าย",
+      "ปัญหาพัดลม TUF ดังเหมือนรุ่นอื่นๆ บางคนต้องใช้หูฟังในออฟฟิศ Asus เคยมีปัญหา WiFi ขาด อัปเดต BIOS เสมอจะช่วย"
+    ]
+  },
+  {
+    "ลำดับ": 76,
+    "ชื่อสินค้า": "HP AI 15-fd2040TU",
+    "ราคา": 25990,
+    "spec": {
+      "CPU": "Intel Core Ultra 7 255U",
+      "GPU": "Intel Graphics 4-Cores iGPU",
+      "RAM": "24 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 24800,
+      "GPU Score": 2100
+    },
+    "reviews": [
+      "เหมาะกับนักศึกษาที่ต้องการโน๊ตบุ๊ก AI Copilot+ PC ใช้ฟีเจอร์ AI ใหม่ๆ ของ Microsoft",
+      "Intel Core Ultra series ใหม่ มี NPU > 40 TOPS รัน AI feature ได้ดี แบตอึดกว่ารุ่นเก่า ใช้งานทั่วไปได้ 7-8 ชม.",
+      "ระวังเรื่องบริการหลังการขายของ HP เช่นเดียวกับรุ่นอื่นๆ ผู้ใช้บางคนเจอปัญหา ควรเทสที่ร้านก่อนรับเครื่อง"
+    ]
+  },
+  {
+    "ลำดับ": 77,
+    "ชื่อสินค้า": "Lenovo LOQ 15ARP9-83JC003MTA",
+    "ราคา": 25990,
+    "spec": {
+      "CPU": "AMD Ryzen 5 7235HS",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "24 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 19200,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "เล่นเกม + ทำงานได้ดี แบตอึดกว่า Intel เล็กน้อย",
+      "ปัญหา LOQ เดิม: จอกระตุกตอนชาร์จ แบตเตอรี่อึดไม่นานเล่นเกม บริการ Lenovo ค่อนข้างช้า เลือกร้านขายดี",
+      "Notebookcheck ให้คะแนน LOQ 15ARP9 Intel version 'good (79%)' AMD variant คาดว่าคะแนนใกล้กัน คุ้มในระดับ midrange"
+    ]
+  },
+  {
+    "ลำดับ": 78,
+    "ชื่อสินค้า": "Acer Nitro V15 ANV15-41-R488",
+    "ราคา": 24990,
+    "spec": {
+      "CPU": "AMD Ryzen 5 6600H",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "32 GB DDR5 5200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18915,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ถือว่าคุ้มมาก ใช้เล่น Genshin Impact Valorant ปรับ High ได้สบาย เฟรมเรตเสถียร",
+      "RTX 3050 รุ่นใหม่นี้แรงพอใช้ได้แค่เกม eSports ปรับสูงสุด แต่เกม AAA ต้องลด preset ลงมาบ้าง พัดลมเสียงดังเวลาเล่นเกมหนัก",
+      "ตัวเครื่องดีไซน์ดุดัน สีดำเรียบ ดูสมเป็น gaming laptop แต่บอดี้พลาสติก กดแล้วยุบเล็กน้อย ระวังเรื่องการพับและพกพา ใส่กระเป๋ามีฟองน้ำดี"
+    ]
+  },
+  {
+    "ลำดับ": 79,
+    "ชื่อสินค้า": "Gigabyte GAMING A16-CMHH2TH893SH",
+    "ราคา": 24990,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 4050",
+      "RAM": "16 GB DDR5 5200 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 8500
+    },
+    "reviews": [
+      "ผู้ใช้ต่างประเทศชม design Golden Curve keyboard กับ WINDFORCE cooling แต่ TGP ต่ำกว่าคู่แข่ง",
+      "RTX 5060 ใน Gigabyte A16 ได้ TGP ต่ำ ทำให้เฟรมเรตด้อยกว่ารุ่นอื่นที่ใส่ TGP สูง พิจารณาก่อนซื้อถ้าเน้นเกมหนัก",
+      "ตัวเครื่องดูดี ดีไซน์ Black Steel ดูพรีเมียม ลำโพง Dolby Atmos เสียงโอเค คีย์บอร์ด Golden Curve โค้งรับนิ้ว แต่ในไทยอาจไม่ค่อยเห็นเครื่องเทียบกับ MSI/Asus"
+    ]
+  },
+  {
+    "ลำดับ": 80,
+    "ชื่อสินค้า": "Lenovo LOQ 15IAX9E-83LK002NTA",
+    "ราคา": 24990,
+    "spec": {
+      "CPU": "Intel Core i5-12450HX",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18200,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "LOQ 15IAX9E Intel + Intel Arc GPU ราคา 25K ผู้ใช้บอกว่าเล่นเกมงบ 20 000+ ไหวไหมกับการ์ดจอ Intel Arc A530M - คำตอบคือ พอใช้งานแต่ไม่เด่น",
+      "driver มีปัญหาบ้างในบางเกม โดยเฉพาะเกมเก่าๆ ผู้ใช้ที่ต้องการเล่นเกมหลากหลายแนะนำดูรุ่น RTX",
+      "เหมาะกับเกมเมอร์งบจำกัด เล่นเกมใหม่ๆ ที่ optimize กับ Intel Arc แต่ถ้าต้องการความหลากหลาย ดูรุ่น LOQ ที่มี RTX จะคุ้มกว่า"
+    ]
+  },
+  {
+    "ลำดับ": 81,
+    "ชื่อสินค้า": "MSI VenturePro 15 AI A1UDXG-029TH",
+    "ราคา": 24990,
+    "spec": {
+      "CPU": "Intel Core Ultra 5 125H",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 20300,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "เป็นโน๊ตบุ๊กทำงาน + เล่นเกมเบาๆ เหมาะกับมืออาชีพ",
+      "MSI Venture 15 AI ลื่นที่สุดในงบนี้ Intel Core Ultra + NPU เร่งงานอัจฉริยะ จอลื่น 15 นิ้ว พอร์ตครบ คีย์บอร์ดพิมพ์สนุก",
+      "ดีไซน์เรียบหรู สีดำ ดูเป็นโน๊ตบุ๊กทำงาน เอาไปประชุมได้ ไม่ดูเป็นเกมเมอร์ ลำโพงเสียงดี แบตอึด"
+    ]
+  },
+  {
+    "ลำดับ": 82,
+    "ชื่อสินค้า": "Acer Nitro Lite 16 NL16-71G-59HM",
+    "ราคา": 23990,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ถือว่าโดดเด่นมาก ใช้เล่นเกมและทำงานพร้อมกันสบาย หน้าจอใหญ่สบายตา",
+      "เป็นรุ่นเริ่มต้นของ Nitro 16 ดีไซน์เรียบกว่ารุ่นพี่ ดูเป็นโน๊ตบุ๊กทำงานมากกว่าเกมมิ่ง แต่ก็ยังเล่นเกมได้ดี เหมาะกับนักศึกษาวิศวะ คอม",
+      "ผู้ใช้รุ่น Nitro บ่นเรื่องเสียงพัดลมเวลาเล่นเกม กับช่องลมร้อน (เช่นเดียวกับ Nitro V) แต่รุ่นนี้ดีกว่าตรงที่จอใหญ่ ระบายความร้อนดีกว่าจอ 15"
+    ]
+  },
+  {
+    "ลำดับ": 83,
+    "ชื่อสินค้า": "Asus Vivobook 16 X1607CA-SILVER529WA",
+    "ราคา": 23990,
+    "spec": {
+      "CPU": "Intel Core Ultra 5 225H",
+      "GPU": "Intel Arc Graphics 130T",
+      "RAM": "16 GB DDR5 5600 MHz",
+      "DISPLAY": "16.0 inch WUXGA (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 21200,
+      "GPU Score": 4800
+    },
+    "reviews": [
+      "จอใหญ่ ทำงาน Office ดี ใช้พิมพ์ Word Excel ดู YouTube ลื่นสบาย ในระดับ ultra-budget เหมาะกับนักเรียน",
+      "ระวังเรื่อง QC ของ Asus Vivobook มีผู้ใช้บางคนเจอปัญหาเครื่องอืดในสัปดาห์แรก จอดับเฉยๆ ต้องเครม ก่อนซื้อควรเทสที่ร้าน",
+      "ลำโพงเสียงเบา ต้องใช้หูฟัง คีย์บอร์ดพิมพ์โอเค ทัชแพดใหญ่ใช้ได้ แบตเตอรี่ 5-6 ชม. ใช้งานทั่วไป สำหรับรุ่นเริ่มต้นถือว่าพอเหมาะ"
+    ]
+  },
+  {
+    "ลำดับ": 84,
+    "ชื่อสินค้า": "MSI Thin 15 B12UC-1887TH",
+    "ราคา": 22990,
+    "spec": {
+      "CPU": "Intel Core i7-12650H",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 22700,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "เป็นรุ่นเริ่มต้นที่ตัวเครื่องบาง พกพาดี ใช้เล่นเกม eSports ลื่น",
+      "ใช้งานทั่วไปทำได้ดี แต่เกมหนักๆ จะ throttle เพราะ cooling จำกัด ใช้ cooling pad ช่วย",
+      "ลำโพงเสียงเบา ต้องใช้หูฟัง คีย์บอร์ดมีไฟ RGB ในบางรุ่นย่อย ทัชแพดใหญ่ใช้ได้ แบตอยู่ได้ 4-5 ชม. งานทั่วไป"
+    ]
+  },
+  {
+    "ลำดับ": 85,
+    "ชื่อสินค้า": "Lenovo IdeaPad Slim 3 15IRH10-83K100D8TA",
+    "ราคา": 21990,
+    "spec": {
+      "CPU": "Intel Core i7-13620H",
+      "GPU": "Intel UHD Graphics 64EUs",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.3 inch (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 25686,
+      "GPU Score": 1900
+    },
+    "reviews": [
+      "เหมาะกับนักเรียน นักศึกษา ใช้เรียน + ทำงานออนไลน์ ไม่เล่นเกม พอใช้งาน",
+      " 'feels too high' design ดี แต่ไม่มีอะไรโดดเด่น แนะนำดูรุ่นอื่นในงบใกล้กัน",
+      "ระวังเรื่อง Lenovo Vantage ที่ขึ้นมาเองและกิน RAM บางคนแนะนำลบทิ้ง ลง Windows ใหม่จะลื่นกว่า สำหรับคนทำงานจริงจัง"
+    ]
+  },
+  {
+    "ลำดับ": 86,
+    "ชื่อสินค้า": "Lenovo LOQ 15ARP9-83JC003QTA",
+    "ราคา": 21990,
+    "spec": {
+      "CPU": "AMD Ryzen 5 7235HS",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "12 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 19200,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "คุ้มมาก เล่นเกม + ทำงานได้ลื่น แบตอึดกว่า Intel",
+      "จอกระตุกตอนชาร์จ แบตเตอรี่อึดไม่นานเล่นเกม บริการ Lenovo ค่อนข้างช้า ระวังเลือกร้านขายดี",
+      "เป็น CPU ที่คุ้มในระดับ midrange เล่นเกม + ทำงานทั่วไปได้ดี แต่ตัดต่อวิดีโอหนักๆ จะช้ากว่า Intel HX-series"
+    ]
+  },
+  {
+    "ลำดับ": 87,
+    "ชื่อสินค้า": "Asus Vivobook 15 M1502NAQ-BQ714WA",
+    "ราคา": 20990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 170",
+      "GPU": "AMD Radeon 680M",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 21000,
+      "GPU Score": 4200
+    },
+    "reviews": [
+      "ผู้ใช้บอกว่าเหมาะกับนักศึกษาใช้เรียน ใช้ Office Photoshop เบาๆ ได้",
+      "ระวังเรื่อง QC ของ Asus Vivobook มีผู้ใช้บางคนเจอปัญหาเครื่องอืดในสัปดาห์แรก จอดับเฉยๆ ต้องเครม ก่อนซื้อควรเทสที่ร้าน",
+      "ลำโพงเสียงเบา คีย์บอร์ดพิมพ์โอเค ทัชแพดใหญ่ใช้ได้ แบตเตอรี่ 5-6 ชม. ใช้งานทั่วไป "
+    ]
+  },
+  {
+    "ลำดับ": 88,
+    "ชื่อสินค้า": "MSI Thin 15 B13UC-3046TH",
+    "ราคา": 20490,
+    "spec": {
+      "CPU": "Intel Core i5-13420H",
+      "GPU": "NVIDIA GeForce RTX 3050",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18776,
+      "GPU Score": 6500
+    },
+    "reviews": [
+      "ใช้ทำงาน + เล่นเกมเบาๆ ได้ดี ดีไซน์เรียบหรู",
+      "เป็นรุ่นเริ่มต้นของ MSI gaming ราคาเข้าถึงง่าย เหมาะกับนักเรียน นักศึกษา ที่ต้องการเล่นเกม eSports + ทำงานเอกสาร",
+      "เหมือน MSI รุ่นอื่น FPS drop ในบางเกม กับเสียง coil whine ต้องอัปเดต BIOS และ driver ลำโพงเสียงเบา ต้องใช้หูฟัง"
+    ]
+  },
+  {
+    "ลำดับ": 89,
+    "ชื่อสินค้า": "Lenovo IdeaPad Slim 3 15ARP10-83K7009GTA",
+    "ราคา": 19490,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7735HS",
+      "GPU": "AMD Radeon 680M",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.3 inch (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 24151,
+      "GPU Score": 4200
+    },
+    "reviews": [
+      "เหมาะกับนักเรียน นักศึกษา ใช้เรียน + ทำงานออนไลน์ ไม่เล่นเกม จอ 15 นิ้ว",
+      "ดีไซน์เรียบหรู สีดำ/เทา ไม่ดูเป็นโน๊ตบุ๊กราคาประหยัด คีย์บอร์ดมี Number pad ครบ พิมพ์งานสะดวก ลำโพง Dolby Audio พอใช้ได้",
+      "ระวังเรื่อง Lenovo Vantage เช่นเดียวกับรุ่นอื่นๆ บางคนแนะนำลบทิ้ง ลง Windows ใหม่จะลื่นกว่า แบตอึด 5-6 ชม. งานทั่วไป"
+    ]
+  },
+  {
+    "ลำดับ": 90,
+    "ชื่อสินค้า": "MSI Modern 14 F13MG-844TH",
+    "ราคา": 18790,
+    "spec": {
+      "CPU": "Intel Core i5-1334U",
+      "GPU": "Intel Iris Xe Graphics G7 80EUs",
+      "RAM": "8 GB DDR4 3200 MHz",
+      "DISPLAY": "14 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 14200,
+      "GPU Score": 2600
+    },
+    "reviews": [
+      "เหมาะกับนักศึกษา พนักงานออฟฟิศ ที่ต้องการโน๊ตบุ๊กบางเบา",
+      "Intel Core i7 + Iris Xe ใช้ Office Photoshop เบาๆ ได้ ไม่เล่นเกม ตัวเครื่องบาง 1.3 กก. พกพาดี ลำโพงเสียงเบา",
+      "แบตเตอรี่ 5-6 ชม. งานทั่วไป ทำได้ดีในระดับราคา ระบายความร้อนพอใช้ ใช้ในระดับ professional ได้"
+    ]
+  },
+  {
+    "ลำดับ": 91,
+    "ชื่อสินค้า": "Asus Vivobook GO 14 M1404FA-EB551WA",
+    "ราคา": 18490,
+    "spec": {
+      "CPU": "AMD Ryzen 5 40",
+      "GPU": "AMD Radeon 610M",
+      "RAM": "16 GB LPDDR5 5600 MHz",
+      "DISPLAY": "14.0 inch (1920 x 1080) Full HD IPS",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 3",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18500,
+      "GPU Score": 1600
+    },
+    "reviews": [
+      "ซื้อให้ลูกใช้เรียน หรือใช้พิมพ์งานทั่วไป ใช้ Office Zoom พอลื่นดี",
+      "ข้อจำกัดที่ผู้ใช้บ่นคือ RAM เริ่มต้น 8GB ไม่พอใช้ ต้องอัปเกรด SSD เริ่มต้น 256/512GB เต็มเร็ว สีไม่จัด",
+      "เหมาะกับเด็กประถม-มัธยม หรือผู้สูงอายุที่ใช้ดู YouTube เล่น LINE อ่านข่าว ไม่ทำงานหนัก ไม่เล่นเกม ราคาเข้าถึงง่าย"
+    ]
+  },
+  {
+    "ลำดับ": 92,
+    "ชื่อสินค้า": "MSI Thin 15 B12UCX-1428TH",
+    "ราคา": 17990,
+    "spec": {
+      "CPU": "Intel Core i5-12450H",
+      "GPU": "NVIDIA GeForce RTX 2050",
+      "RAM": "8 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 17144,
+      "GPU Score": 4800
+    },
+    "reviews": [
+      "บางและเบา 2 กก. นิดๆ พกพาง่ายกว่า gaming laptop ทั่วไป ใช้เรียนเขียนโปรแกรม + เล่นเกม eSports ลื่นดี Valorant 200+ FPS",
+      "FPS drop เป็นช่วงๆ ในบางเกม กับเสียง coil whine ตอนเล่นเกม ต้องอัปเดต BIOS และ driver ให้ทันสม่ำเสมอ",
+      "ดีไซน์เรียบหรู สีดำ Cosmos Gray ดูเป็นโน๊ตบุ๊กทำงานมากกว่าเกมมิ่ง เอาไปเรียน ไปทำงานในออฟฟิศได้ไม่เคอะเขิน ลำโพงเสียงเบา ต้องใช้หูฟัง"
+    ]
+  },
+  {
+    "ลำดับ": 93,
+    "ชื่อสินค้า": "Lenovo IdeaPad Slim 3 14ARP10-83K6004JTA",
+    "ราคา": 17990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7735HS",
+      "GPU": "AMD Radeon 680M",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "14.0 inch (1920x1200) Full HD+",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 24151,
+      "GPU Score": 4200
+    },
+    "reviews": [
+      "ซื้อใช้เรียน เปิดเครื่องเร็ว ใช้ Office Chrome Zoom ลื่นตลอด ตัวเครื่องบาง เบา แบกไปเรียนสะดวก",
+      "จอความสว่างไม่จัดเท่าไหร่ ใช้กลางแจ้งมองยาก ลำโพงเสียงเบา ต้องใช้หูฟัง แบตเตอรี่ใช้งานทั่วไปได้ 5-6 ชม. ถือว่าพอใช้",
+      "ผู้ใช้บางคนบ่นว่า Lenovo มี bloatware (Lenovo Vantage) ที่ขึ้นมาเอง บางคนต้องล้างเครื่องลง Windows ใหม่เพื่อให้ลื่น"
+    ]
+  },
+  {
+    "ลำดับ": 94,
+    "ชื่อสินค้า": "HP 15-fr0024TU",
+    "ราคา": 17990,
+    "spec": {
+      "CPU": "Intel Core i5-13500H",
+      "GPU": "Intel UHD Graphics Xe G4",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 3",
+      "OS": "Windows 11 Home Single Language"
+    },
+    "benchmark": {
+      "CPU Score": 23145,
+      "GPU Score": 1700
+    },
+    "reviews": [
+      "เป็นรุ่น budget ของ HP เหมาะกับนักเรียน นักศึกษา ใช้เรียน + ทำงานทั่วไป ไม่เล่นเกม",
+      "ไม่มีการ์ดจอแยก ใช้ Intel Iris Xe เล่นเกมไม่ค่อยได้ จอ FHD พอใช้ ลำโพงเสียงเบา ทั่วๆไปในระดับราคา",
+      "แบตเตอรี่ 5-6 ชม. งานทั่วไป ระวังเรื่องบริการหลังการขายของ HP เครมยาก รออะไหล่นาน"
+    ]
+  },
+  {
+    "ลำดับ": 95,
+    "ชื่อสินค้า": "MSI Modern 14 F13MG-843TH",
+    "ราคา": 16890,
+    "spec": {
+      "CPU": "Intel Core i3-1315U",
+      "GPU": "Intel UHD Graphics 64EUs",
+      "RAM": "8 GB DDR4 3200 MHz",
+      "DISPLAY": "14 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 11300,
+      "GPU Score": 1900
+    },
+    "reviews": [
+      "เป็นโน๊ตบุ๊กทำงานคุ้ม ใช้ Office Zoom ลื่น",
+      "ดีไซน์เรียบหรู ไม่ดูเป็นเกมมิ่งเลย เหมาะกับนักศึกษา พนักงานออฟฟิศ พกพาไปประชุมได้สะดวก ไม่ใหญ่เทอะทะ",
+      "ลำโพงเสียงเบา ต้องใช้หูฟัง แบตเตอรี่ใช้งานทั่วไป 5-6 ชม. ทำได้ดีในระดับราคา ระบายความร้อนพอใช้ ไม่ร้อนจนใช้ตักไม่ได้"
+    ]
+  },
+  {
+    "ลำดับ": 96,
+    "ชื่อสินค้า": "Acer Aspire Lite 15 AL15-42P-R4PQ",
+    "ราคา": 15990,
+    "spec": {
+      "CPU": "AMD Ryzen 7 7730U",
+      "GPU": "AMD Radeon RX Vega 8",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 18712,
+      "GPU Score": 2900
+    },
+    "reviews": [
+      "ทำงาน Excel ขนาดใหญ่ เปิด Chrome 20+ แท็บ ก็ยังลื่น เหมาะกับนักบัญชี/นักศึกษาที่ทำงานเอกสาร",
+      "ข้อเสียคือไม่มีการ์ดจอแยก เล่นเกมไม่ค่อยได้ ตัวเครื่องบางและน้ำหนัก 1.7 กก. ดูดีในระดับราคา แต่บอดี้พลาสติก กดแล้วยุบนิดหน่อย",
+      "แบตเตอรี่ 4-5 ชม. ใช้งานทั่วไป ค่อนข้างน้อยสำหรับโน๊ตบุ๊กบาง คาดว่าเป็นเพราะ 3 cell ไม่ใหญ่ มีพอร์ต USB-A 3 ช่อง USB-C 1 ช่อง ครบใช้งาน"
+    ]
+  },
+  {
+    "ลำดับ": 97,
+    "ชื่อสินค้า": "Acer Aspire Lite 15 AL15-52P-586H",
+    "ราคา": 14990,
+    "spec": {
+      "CPU": "Intel Core 5 120U",
+      "GPU": "Intel Iris Xe Graphics G7 80EUs",
+      "RAM": "16 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 15800,
+      "GPU Score": 2600
+    },
+    "reviews": [
+      "ซื้อให้ลูกใช้เรียน บอกว่าใช้ Office Chrome Zoom ลื่นพอ ใช้งานทั่วไปไม่มีปัญหา",
+      "ไม่มีการ์ดจอแยก เล่นเกมไม่ได้ ลำโพงเสียงเบา จอ FHD สีไม่จัด แบตอยู่ได้ 4-5 ชม.",
+      "เหมาะกับเด็กนักเรียน-นักศึกษา ที่ต้องการแค่ใช้เรียนทั่วไป ไม่เล่นเกม ราคาเข้าถึงง่าย ใช้ได้ 2-3 ปี ก่อนต้องเปลี่ยน"
+    ]
+  },
+  {
+    "ลำดับ": 98,
+    "ชื่อสินค้า": "Acer Aspire Lite 15 AL15-42P-R3Q5",
+    "ราคา": 13990,
+    "spec": {
+      "CPU": "AMD Ryzen 5 7430U",
+      "GPU": "AMD Radeon RX Vega 7",
+      "RAM": "16 GB DDR4 3200 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 16100,
+      "GPU Score": 2600
+    },
+    "reviews": [
+      "ซื้อให้ลูกใช้เรียนมหาลัย คุ้มสุดๆ ใช้พิมพ์รายงาน ดู YouTube Zoom เรียนออนไลน์ลื่นมาก",
+      "ข้อเสียคือไม่มีการ์ดจอแยก เล่นเกมไม่ได้แน่นอน ใช้ AMD Radeon iGPU เล่น Sims 4 ปรับ Low ยังไม่ค่อยลื่น ถ้าจะเล่นเกมต้องดูรุ่นอื่น",
+      "ตัวเครื่องบาง น้ำหนัก 1.7 กก. พกพาดี แบตอยู่ได้ 4-5 ชม. จอ FHD IPS สีไม่จัดมากแต่ใช้งานเอกสารพอเหมาะ ลำโพงเสียงเบา ต้องต่อหูฟัง"
+    ]
+  },
+  {
+    "ลำดับ": 99,
+    "ชื่อสินค้า": "Acer Aspire Lite 15 AL15-52P-38J3",
+    "ราคา": 12990,
+    "spec": {
+      "CPU": "Intel Core i3-1315U",
+      "GPU": "Intel UHD Graphics 64EUs",
+      "RAM": "8 GB DDR5 4800 MHz",
+      "DISPLAY": "15.6 inch (1920x1080) Full HD",
+      "STORAGE": "512 GB SSD PCIe M.2 Gen 4",
+      "OS": "Windows 11 Home"
+    },
+    "benchmark": {
+      "CPU Score": 11300,
+      "GPU Score": 1900
+    },
+    "reviews": [
+      "เหมาะกับนักเรียนที่ต้องการแค่ใช้ Word Excel Chrome ไม่เล่นเกม",
+      "รุ่นเริ่มต้นนี้ RAM ใส่แค่ 8GB ใช้นานๆ จะเริ่มอืด แนะนำซื้อรุ่น 16GB ตั้งแต่แรกหรือลงทุนอัปเกรด RAM เพิ่ม",
+      "ตัวเครื่องบาง ดูดี ลำโพงเสียงเบามาก เปิด YouTube ดูคนเดียวพอได้ ถ้าเปิดดูกับคนอื่นต้องต่อลำโพง แบตอยู่ได้ 4-5 ชม. ทำงานทั่วไป"
+    ]
+  }
+]
