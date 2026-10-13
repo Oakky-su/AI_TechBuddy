@@ -45,16 +45,31 @@ def laptops_to_documents(laptops):
         ids.append(f"spec_{no}")
 
         # ── เอกสารรีวิว ──
+        # ติดราคาและคะแนนเบนช์มาร์กไว้ในข้อความรีวิวด้วย เพราะคำถามเชิงความรู้สึก
+        # ("แบตอึดไหม", "เครื่องร้อนไหม") จะดึงแต่รีวิวมาเป็น context — ถ้ารีวิวไม่มีตัวเลขพวกนี้
+        # LLM จะไม่มีราคาให้อ้าง แล้วไปแต่งเอาเอง
         for j, review in enumerate(lp.get("reviews", [])):
-            documents.append(f"รีวิวจากผู้ใช้รุ่น {name}: {review}")
+            documents.append(
+                f"รีวิวจากผู้ใช้รุ่น {name} ราคา {price:,} บาท "
+                f"(คะแนนเบนช์มาร์ก CPU {bench.get('CPU Score','-')} / "
+                f"GPU {bench.get('GPU Score','-')}): {review}"
+            )
             metadatas.append({"type": "review", "name": name, "price": price})
             ids.append(f"review_{no}_{j}")
 
-    # ── เอกสารสรุปภาพรวมร้าน (ตอบ "มีกี่รุ่น / ราคาเริ่มต้น-สูงสุด") ──
-    prices = [lp["ราคา"] for lp in laptops]
+    # ── เอกสารสรุปภาพรวมร้าน (ตอบ "มีกี่รุ่น / ถูกสุด-แพงสุด / ในงบนี้มีกี่รุ่น") ──
+    cheapest = min(laptops, key=lambda x: x["ราคา"])
+    priciest = max(laptops, key=lambda x: x["ราคา"])
+    tiers = ", ".join(
+        f"ไม่เกิน {t:,} บาท มี {sum(1 for lp in laptops if lp['ราคา'] <= t)} รุ่น"
+        for t in (15_000, 20_000, 25_000, 30_000, 40_000, 50_000)
+    )
     documents.append(
         f"ร้านมีโน้ตบุ๊คให้เลือกทั้งหมด {len(laptops)} รุ่น "
-        f"ราคาเริ่มต้น {min(prices):,} บาท ไปจนถึง {max(prices):,} บาท"
+        f"ราคาเริ่มต้น {cheapest['ราคา']:,} บาท ไปจนถึง {priciest['ราคา']:,} บาท | "
+        f"รุ่นที่ถูกที่สุดในร้านคือ {cheapest['ชื่อสินค้า']} ราคา {cheapest['ราคา']:,} บาท | "
+        f"รุ่นที่แพงที่สุดในร้านคือ {priciest['ชื่อสินค้า']} ราคา {priciest['ราคา']:,} บาท | "
+        f"จำนวนรุ่นแยกตามช่วงราคา: {tiers}"
     )
     metadatas.append({"type": "summary", "name": "ภาพรวม", "price": 0})
     ids.append("summary_0")

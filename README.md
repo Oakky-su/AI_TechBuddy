@@ -1,148 +1,106 @@
-# 🤖 AI TechBuddy — แชทบอทแนะนำโน้ตบุ๊ค
+# 🤖 Tech Buddy — แชทบอทแนะนำโน้ตบุ๊ค
 
-> **"เพื่อนที่รู้เรื่องโน้ตบุ๊ค"** — ระบบ RAG Chatbot ภาษาไทยสำหรับแนะนำโน้ตบุ๊คแบบตรงไปตรงมา ไม่เชียร์ขาย
+> **"เพื่อนที่รู้เรื่องโน้ตบุ๊ค"** — RAG Chatbot ภาษาไทยที่แนะนำโน้ตบุ๊คจากสินค้าจริง 99 รุ่นในร้าน
+> ตรงไปตรงมา ไม่เชียร์ขาย และไม่แต่งตัวเลขขึ้นเอง
 
----
-
-## 📋 สารบัญ
-
-- [ภาพรวม](#ภาพรวม)
-- [Tech Stack](#tech-stack)
-- [สถาปัตยกรรม](#สถาปัตยกรรม)
-- [การติดตั้งและรัน](#การติดตั้งและรัน)
-- [Environment Variables](#environment-variables)
-- [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์)
+ผู้ใช้พิมพ์ว่า *"โน้ตบุ๊คเล่นเกม งบ 25,000"* แล้วได้คำแนะนำ 1 รุ่น พร้อมเหตุผล สเปก
+คะแนนเบนช์มาร์กที่แปลเป็นภาษาคน ข้อดี และข้อเสียจากรีวิวผู้ใช้จริง
 
 ---
 
-## ภาพรวม
+## ความสามารถหลัก
 
-AI TechBuddy เป็น **Flask Web Application** ที่ใช้เทคนิค **Retrieval-Augmented Generation (RAG)** เพื่อแนะนำโน้ตบุ๊คให้ผู้ใช้ โดย:
-
-- ดึงข้อมูลสเปก ราคา และรีวิวจาก `laptops.json` มาทำ **Vector Embedding**
-- เมื่อผู้ใช้ถาม ระบบจะค้นหาข้อมูลที่เกี่ยวข้องจาก **Chroma Vector DB**
-- ส่งข้อมูลนั้นให้ **ThaiLLM / OpenThaiGPT** แต่งคำตอบเป็นภาษาไทย แบบเป็นกันเอง
+- **RAG แยกโควตาเอกสาร** — ค้นเอกสารสเปก 4 ชิ้น + รีวิว 3 ชิ้น แยกกัน แล้วแนบภาพรวมร้านทุกครั้ง
+  เพื่อการันตีว่า AI เห็นราคาและสเปกเสมอ (ฐานข้อมูลมีรีวิวมากกว่าสเปก 3 เท่า ถ้าค้นรวมจะได้แต่รีวิว)
+- **กรองงบตั้งแต่ชั้นฐานข้อมูล** — อ่านงบจากประโยค (`งบ 2 หมื่น`, `งบ 20k`, `งบ 20000-25000`,
+  `งบสามหมื่นห้า`) แล้วให้ Chroma กรองราคาตอน query ไม่ใช่ค้นมาแล้วค่อยทิ้ง
+- **ไม่แต่งตัวเลข** — ทุกราคาและคะแนนมาจากฐานข้อมูลจริง มีชุดทดสอบคอยจับ
+- **ส่วนต่างงบคำนวณด้วยโค้ด** — ไม่ปล่อยให้ LLM บวกลบเลขเอง เพราะพลาดได้
+- **รูปแบบคำตอบคงที่** — เหตุผล (CPU/GPU/RAM/STORAGE/ราคา) → สรุปเบนช์มาร์ก → ข้อดี → ข้อเสีย
+- **หน้าเว็บธีมแดง** — โหมดสว่าง/มืด, เรนเดอร์ Markdown, ประวัติแชทพร้อมปุ่มลบ
 
 ---
 
 ## Tech Stack
 
 | ชั้น | เทคโนโลยี |
-|------|-----------|
-| Web Framework | Flask 3.0 + Gunicorn |
-| Embedding Model | `BAAI/bge-m3` (หลายภาษา, ~2 GB) |
-| Vector Database | ChromaDB (Persistent) |
-| LLM | OpenThaiGPT via ThaiLLM API |
+|---|---|
+| Web | Flask 3.0 + Gunicorn |
+| Embedding | `BAAI/bge-m3` (หลายภาษา, 1024 มิติ) |
+| Vector DB | ChromaDB (Persistent) |
+| LLM | OpenThaiGPT 8B ผ่าน ThaiLLM API |
+| Frontend | HTML + Vanilla JS + CSS |
 | Container | Docker + Docker Compose |
-| Python | 3.12-slim |
 
 ---
 
-## สถาปัตยกรรม
-
-```
-laptops.json
-     │
-     ▼ (build_index.py)
-bge-m3 Embedding
-     │
-     ▼
-Chroma Vector DB  ◄──── User Query (Embed) ────► Flask App (app.py)
-                                                       │
-                                                       ▼
-                                              ThaiLLM / OpenThaiGPT API
-                                                       │
-                                                       ▼
-                                                  คำตอบภาษาไทย
-```
-
-**ขั้นตอนการทำงาน:**
-1. `build_index.py` อ่าน `laptops.json` → แปลงเป็นเอกสารภาษาไทย (สเปก + รีวิว) → embed → เก็บลง Chroma
-2. เมื่อมี request → Embed คำถาม → Vector Search (Top 5) → ส่งเป็น context ให้ LLM
-3. LLM แต่งคำตอบตาม system prompt "เพื่อนที่รู้เรื่องโน้ตบุ๊ค"
-
----
-
-## การติดตั้งและรัน
-
-### วิธีที่ 1: Docker Compose (แนะนำ)
+## เริ่มใช้งาน
 
 ```bash
-# 1. สร้างไฟล์ .env (ดู Environment Variables ด้านล่าง)
-cp .env.example .env   # หรือสร้างเองตาม template
-
-# 2. Build และรัน
+cp .env.example .env     # ใส่ THAILLM_API_KEY
 docker compose up --build
-
-# 3. เปิดเบราว์เซอร์
-open http://localhost:5000
+# เปิด http://localhost:5000
 ```
 
-> ⚠️ **หมายเหตุ:** Docker image จะ download โมเดล `bge-m3` (~2 GB) และสร้าง Chroma index ตอน build — ใช้เวลานานในครั้งแรก
+> ครั้งแรกใช้เวลานาน เพราะต้องโหลดโมเดล bge-m3 (~2 GB) และสร้าง vector index ตอน build
 
-### วิธีที่ 2: รันตรงบนเครื่อง (Local)
+รันบนเครื่องโดยตรง:
 
 ```bash
-# 1. ติดตั้ง dependencies
 pip install -r requirements.txt
-
-# 2. สร้าง vector index (รันครั้งเดียว)
-python build_index.py
-
-# 3. รันแอป
-flask run
-# หรือใช้ gunicorn
-gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 --timeout 120 app:app
+python build_index.py    # สร้าง vector index (รันครั้งเดียว)
+python app.py
 ```
 
 ---
 
-## Environment Variables
+## API
 
-สร้างไฟล์ `.env` ในโฟลเดอร์โปรเจกต์:
-
-```env
-# ThaiLLM / OpenThaiGPT API
-THAILLM_API_KEY=your-api-key-here
-THAILLM_BASE_URL=http://thaillm.or.th/api/v1
-THAILLM_MODEL=openthaigpt-thaillm-8b-instruct-v7.2
-
-# ปิดโหมดคิด (reasoning) → เร็วขึ้น แต่คุณภาพอาจลด
-DISABLE_THINKING=false
-
-# Flask session secret key
-SECRET_KEY=change-me-to-something-random
-```
-
-| Variable | Default | คำอธิบาย |
-|----------|---------|-----------|
-| `THAILLM_API_KEY` | (บังคับ) | API Key จาก ThaiLLM |
-| `THAILLM_BASE_URL` | `http://thaillm.or.th/api/v1` | Endpoint ของ ThaiLLM |
-| `THAILLM_MODEL` | `openthaigpt-thaillm-8b-instruct-v7.2` | โมเดลที่ใช้ |
-| `DISABLE_THINKING` | `false` | `true` = ปิด reasoning mode |
-| `SECRET_KEY` | random (ชั่วคราว) | Flask session secret |
+| Method | Path | คำอธิบาย |
+|---|---|---|
+| `GET` | `/` | หน้าแชท |
+| `POST` | `/chat` | `{"message": "..."}` → `{"message": "..."}` |
+| `POST` | `/new_chat` | ล้างประวัติและงบที่จำไว้ |
+| `POST` | `/restore` | โหลดบทสนทนาเก่ากลับเข้า session |
 
 ---
 
-## โครงสร้างโปรเจกต์
+## โครงสร้าง
 
 ```
-AI_TechBuddy/
-├── app.py              # Flask app หลัก + RAG pipeline + routes
-├── build_index.py      # สคริปต์สร้าง Chroma Vector Index
-├── laptops.json        # ข้อมูลโน้ตบุ๊ค (สเปก, ราคา, รีวิว)
-├── requirements.txt    # Python dependencies
-├── Dockerfile          # Docker image (bge-m3 + Chroma index อยู่ใน image)
-├── docker-compose.yml  # Compose config + hot-reload สำหรับพัฒนา
-├── templates/          # HTML templates (Jinja2)
-├── static/             # CSS, JS, รูปภาพ
-└── chroma_db/          # Vector DB (สร้างอัตโนมัติ, ไม่ควร commit)
+app.py              สมองทั้งหมด — route, ค้นหา, prompt, เรียก LLM
+build_index.py      แปลง laptops.json เป็น vector index (397 เอกสาร)
+laptops.json        ข้อมูลสินค้า 99 รุ่น
+templates/          หน้าเว็บ
+static/             CSS (ตัวแปรสีอยู่บนสุด) + JS
+tests/              ชุดทดสอบ 5 ไฟล์
+```
+
+> ⚠️ แก้ `laptops.json` แล้วต้องรัน `python build_index.py` ใหม่ ไม่งั้นบอทยังใช้ข้อมูลเดิม
+
+---
+
+## ทดสอบ
+
+```bash
+PYTHONIOENCODING=utf-8 python tests/test_unit.py          # 66 เคส ไม่ต้องใช้โมเดล
+PYTHONIOENCODING=utf-8 python tests/test_api.py           # ต้องมีแอปรันอยู่
+PYTHONIOENCODING=utf-8 python tests/test_hallucination.py # เช็คว่า AI แต่งตัวเลขไหม
+
+# ชั้น retrieval ต้องรันในที่ที่มี chromadb
+docker cp tests/test_retrieval.py ai_teddy-teddy-1:/app/
+docker exec ai_teddy-teddy-1 python /app/test_retrieval.py
 ```
 
 ---
 
-## 💡 Tips สำหรับนักพัฒนา
+## ตั้งค่า (.env)
 
-- **Hot-reload**: `docker-compose.yml` mount เฉพาะ `app.py`, `templates/`, `static/` → แก้โค้ดแล้วเห็นผลทันทีโดยไม่ต้อง build ใหม่
-- **ห้าม** mount ทั้งโฟลเดอร์ด้วย `".:/app"` เพราะจะบัง `chroma_db/` และ `.cache/huggingface/` ที่อยู่ใน image
-- รันด้วย **1 worker** เท่านั้น เพราะโมเดลกินแรม ~2 GB และ session ต้องอยู่ใน process เดียวกัน
+| ตัวแปร | ค่าเริ่มต้น | คำอธิบาย |
+|---|---|---|
+| `THAILLM_API_KEY` | **(บังคับ)** | API Key จาก ThaiLLM |
+| `THAILLM_MODEL` | `openthaigpt-thaillm-8b-instruct-v7.2` | ชื่อโมเดล |
+| `DISABLE_THINKING` | `false` | `true` = ตอบเร็วและนิ่งขึ้น แต่คุณภาพลด |
+| `SECRET_KEY` | สุ่มชั่วคราว | ถ้าไม่ตั้ง ประวัติจะหายทุกครั้งที่รีสตาร์ต |
+
+ดูทั้งหมดใน `.env.example`

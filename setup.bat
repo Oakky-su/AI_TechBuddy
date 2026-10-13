@@ -21,7 +21,7 @@ if errorlevel 1 ( echo ERROR: pip install failed & pause & exit /b 1 )
 
 echo.
 echo [2/3] Building vector database (this may take 3-5 minutes)...
-python build_db.py
+python build_index.py
 if errorlevel 1 ( echo ERROR: build_db.py failed & pause & exit /b 1 )
 
 echo.

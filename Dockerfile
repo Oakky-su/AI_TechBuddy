@@ -7,11 +7,17 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# ติดตั้ง dependencies ก่อน (ใช้ layer cache — โค้ดเปลี่ยนแล้วไม่ต้องติดตั้งใหม่)
+# ติดตั้ง PyTorch รุ่น CPU ก่อน — สำคัญมาก
+# ถ้าปล่อยให้ pip เลือกเอง มันจะลาก torch รุ่น CUDA มาพร้อมแพ็กเกจ nvidia-* รวม ~2.5 GB
+# (cudnn, cublas, nccl, cusolver ฯลฯ) ซึ่งโปรเจคนี้ไม่ได้ใช้เลยเพราะรันบน CPU ล้วน
+# ผลคือ image พองเป็น ~16 GB และ build นานเป็นชั่วโมงเพราะมัวแต่โหลด
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+
+# ติดตั้ง dependencies ที่เหลือ (ใช้ layer cache — โค้ดเปลี่ยนแล้วไม่ต้องติดตั้งใหม่)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-#HelloHelloHello
+# โหลดโมเดล embedding เข้า image เลย เพื่อให้ตอนรันไม่ต้องรอดาวน์โหลด ~2 GB
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-m3')"
 
 # copy โค้ด + laptops.json
