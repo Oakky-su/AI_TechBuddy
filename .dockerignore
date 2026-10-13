@@ -7,3 +7,8 @@ __pycache__/
 *.bat
 .cache/
 chroma_db/
+# ไฟล์เทสต์และเอกสาร — ไม่ต้องอยู่ใน image และกันไม่ให้ build cache ของ
+# build_index.py (ขั้นที่แพงที่สุด) พังทุกครั้งที่แก้เทสต์
+tests/
+docs/
+*.md
