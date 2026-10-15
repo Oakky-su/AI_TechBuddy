@@ -130,8 +130,9 @@ def test_documents():
           sum("บาท" in d for d in review_docs), "ถ้า 0 = LLM อ่านราคาจากรีวิวไม่ได้")
     # เอกสารสรุปต้องขึ้นต้นด้วยคำที่ retrieve() ใช้เช็ค
     summary_doc = [d for d, m in zip(docs, metas) if m["type"] == "summary"][0]
-    check("documents", "เอกสารสรุปขึ้นต้น 'ร้านมีโน้ตบุ๊ค'", True,
-          summary_doc.startswith("ร้านมีโน้ตบุ๊ค"), "retrieve() พึ่งพา prefix นี้")
+    # app.is_summary_doc() ใช้คำขึ้นต้นนี้แยกเอกสารสรุปออกจากเอกสารสเปก
+    check("documents", "เอกสารสรุปขึ้นต้น 'ภาพรวมข้อมูลโน้ตบุ๊ค'", True,
+          summary_doc.startswith("ภาพรวมข้อมูลโน้ตบุ๊ค"), "is_summary_doc() พึ่งพา prefix นี้")
 
 
 # ─────────────────────────────────────────────────────────────

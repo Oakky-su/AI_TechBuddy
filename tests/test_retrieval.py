@@ -20,7 +20,9 @@ def check(name, ok, detail):
 
 
 def is_summary(doc):
-    return doc.startswith("ร้านมีโน้ตบุ๊ค")
+    # ใช้ตัวเดียวกับแอป เพื่อไม่ให้เทสต์ล้าสมัยเมื่อข้อความในเอกสารสรุปเปลี่ยน
+    from app import is_summary_doc
+    return is_summary_doc(doc)
 
 
 def doc_price(doc):
@@ -67,7 +69,7 @@ check("ไม่ระบุงบ -> over_budget=False", over is False,
 docs, over = retrieve("โน้ตบุ๊คทำงาน", budget=20000)
 n_summary = sum(1 for d in docs if is_summary(d))
 n_spec = sum(1 for d in docs if " บาท | " in d)
-check("แนบเอกสารภาพรวมร้านมาด้วยเสมอ", n_summary == 1,
+check("แนบเอกสารภาพรวมมาด้วยเสมอ", n_summary == 1,
       f"มีเอกสารสรุป {n_summary} อัน")
 check("เอกสารสรุปไม่กินโควตาเอกสารสเปก", n_spec >= 1,
       f"สเปก {n_spec} อัน จาก context ทั้งหมด {len(docs)} อัน")
