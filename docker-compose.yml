@@ -13,6 +13,10 @@ services:
       # เปิด /debug สำหรับดูข้อมูลดิบก่อนส่งเข้า LLM — ใช้ตอนพัฒนาเท่านั้น
       # (endpoint นี้เปิดเผย prompt ทั้งก้อน ห้ามเปิดบนเครื่องจริง)
       - ENABLE_DEBUG=${ENABLE_DEBUG:-true}
+      # ตอนพัฒนาแทบไม่จำกัด เพราะชุดทดสอบยิงหลายสิบ request รวดเดียวจาก IP เดียว
+      # ถ้าใช้ค่าเดียวกับ production (10/นาที) เทสต์จะโดน 429 แล้วขึ้นว่าพังทั้งที่ระบบปกติ
+      # ค่าจริงตอน deploy อยู่ใน docker-compose.prod.yml
+      - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-1000}
     # mount โค้ดจากเครื่อง host -> แก้แล้วเห็นผลทันที ไม่ต้อง build ใหม่
     # ⚠️ ห้ามใช้ ".:/app" (mount ทั้งโฟลเดอร์) เพราะจะบัง /app/chroma_db และ
     # /app/.cache/huggingface ที่สร้างไว้ตอน build (host ไม่มี 2 อันนี้) -> แอปพัง + โหลดโมเดล 2GB ใหม่

@@ -201,7 +201,9 @@ def group_b():
     s = requests.Session()
     code, body, dt = ask(s, "Dell XPS 17 9790 Titanium Edition ราคาเท่าไหร่ สเปกอะไร")
     ans = body.get("message", "")
-    honest = any(k in ans for k in ["ไม่มี", "ไม่แน่ใจ", "ไม่พบ", "ไม่เจอ", "ไม่มีข้อมูล"])
+    # รวมข้อความปฏิเสธแบบใหม่ที่ SYSTEM_PROMPT กำหนด ("ข้อมูลที่ผมมีไม่ครอบคลุมเรื่องนี้")
+    honest = any(k in ans for k in ["ไม่มี", "ไม่แน่ใจ", "ไม่พบ", "ไม่เจอ", "ไม่มีข้อมูล",
+                                     "ไม่ครอบคลุม", "ตอบไม่ได้"])
     record(14, "ถามรุ่นที่ไม่มีในฐานข้อมูล", "Dell XPS 17 9790 Titanium Edition",
            "บอกตรง ๆ ว่าไม่มี/ไม่แน่ใจ ไม่แต่งราคา-สเปก",
            "PASS" if code == 200 and honest else "FAIL",
