@@ -113,7 +113,7 @@ def store_stats() -> str:
     cheap, top = min(cat, key=lambda x: x["price"]), max(cat, key=lambda x: x["price"])
     brands = {}
     for lp in cat:
-        brands[lp["brand"]] = brands.get(lp["brand"], 0) + 1
+        brands.setdefault(lp["brand"], []).append(lp["price"])
     rams = {}
     for lp in cat:
         rams[lp["ram_gb"]] = rams.get(lp["ram_gb"], 0) + 1
@@ -123,7 +123,8 @@ def store_stats() -> str:
     return (
         f"ทั้งหมด {len(cat)} รุ่น ราคา {cheap['price']:,}–{top['price']:,} บาท | "
         f"ถูกที่สุด {cheap['name']} ({cheap['price']:,} บาท) | แพงที่สุด {top['name']} ({top['price']:,} บาท) | "
-        "ยี่ห้อ: " + ", ".join(f"{b} {n} รุ่น" for b, n in sorted(brands.items(), key=lambda kv: -kv[1])) + " | "
+        "ยี่ห้อ: " + ", ".join(f"{b} {len(p)} รุ่น ({min(p):,}–{max(p):,} บาท)"
+                               for b, p in sorted(brands.items(), key=lambda kv: -len(kv[1]))) + " | "
         "แรม: " + ", ".join(f"{g}GB {n} รุ่น" for g, n in sorted(rams.items())) + " | "
         "การ์ดจอ: " + ", ".join(f"{f} {n} รุ่น" for f, n in sorted(fams.items(), key=lambda kv: -kv[1]))
     )
@@ -547,29 +548,47 @@ def select(plan: dict, question: str, trace: dict | None = None) -> dict:
 
 
 # ───────────────────────── 4. ตอบ ─────────────────────────
-ANSWER_RULES = """คุณคือ "Tech Buddy" ผู้ช่วยเลือกโน้ตบุ๊คจากข้อมูลของร้าน (99 รุ่น) พูดสุภาพแบบเพื่อนที่รู้เรื่องโน้ตบุ๊ค ลงท้ายด้วย "ครับ" ไม่เชียร์ขาย
+ANSWER_RULES = """คุณคือ "Tech Buddy" พนักงานแนะนำโน้ตบุ๊คของร้าน (ข้อมูล 99 รุ่น) พูดสุภาพเป็นกันเองแบบเพื่อนที่รู้เรื่องโน้ตบุ๊ค
+ลงท้ายด้วย "ครับ" (คำเดียว ไม่ซ้ำเป็น "ครับครับ") เรียกลูกค้าว่า "คุณ" ช่วยลูกค้าตัดสินใจอย่างจริงใจ ไม่ยัดเยียด ไม่กดดัน
+ไม่ต้องทักทายหรือขึ้นต้นด้วย "สวัสดี" ให้เริ่มตอบคำถามเลย
 กฎ:
 1. ใช้เฉพาะข้อมูลใน "รายการที่ระบบคัดมา" และ "ข้อมูลร้าน" ห้ามแต่งรุ่น ราคา สเปก หรือคะแนน และห้ามใช้ความรู้นอกข้อมูล
 2. ระดับคะแนน (เริ่มต้น / กลาง / กลาง-สูง / สูง) และส่วนต่างงบ ใช้ตามที่ระบบเขียนไว้ ห้ามคำนวณหรือเดาใหม่
 3. เขียนชื่อรุ่นเต็มตามรายการทุกครั้ง
 4. ถ้ามีหมายเหตุจากระบบ ให้ทำตามหมายเหตุนั้น
-5. ตอบตามรูปแบบใน "งานของคุณ" ใช้ markdown (หัวข้อด้วย **ตัวหนา** และ bullet "-") ห้ามใช้ตาราง"""
+5. ตอบตามรูปแบบใน "งานของคุณ" ใช้ markdown (หัวข้อด้วย **ตัวหนา** และ bullet "-") ห้ามใช้ตาราง
+6. ใส่รายละเอียดให้ครบตามที่ "งานของคุณ" บอก ไม่ต้องย่อ ลูกค้าอยากเห็นข้อมูลก่อนตัดสินใจ
+7. ถ้ารายการมีรุ่นสินค้า (ยกเว้นคำถามภาพรวมร้าน) ปิดท้ายคำตอบด้วยหัวข้อ **คำแนะนำจาก Tech Buddy** 2-3 ประโยค:
+   ถ้าให้เลือก รุ่นไหนในรายการน่าซื้อที่สุดสำหรับลูกค้าคนนี้ เพราะอะไร (อ้างสเปก ราคา หรือรีวิว)
+   แล้วชวนคุยต่อแบบเป็นกันเอง เช่น ให้ช่วยเทียบรุ่น ดูสเปกเพิ่ม หรือบอกการใช้งานเพื่อเลือกให้ตรงขึ้น
+   - เสนอได้เฉพาะรุ่นในรายการ ห้ามพูดถึงรุ่นอื่น
+   - ห้ามพูดถึงโปรโมชั่น ส่วนลด ของแถม สต็อก การผ่อน หรือการรับประกัน เพราะไม่มีในข้อมูล
+   - ห้ามเร่งให้ซื้อ เช่น บอกให้รีบตัดสินใจ หรือบอกว่าของใกล้หมด"""
+
+# รูปแบบรายละเอียดของ 1 รุ่น (ใช้ซ้ำในหลายประเภทคำถาม)
+FULL_SPEC = ("'- **สเปก:** CPU ... (คะแนน X ระดับ...) / GPU ... (คะแนน X ระดับ...) / แรม ... / ความจุ ... / จอ ... / OS' "
+             "'- **เหมาะกับ:** งานที่สเปกและรีวิวบอกว่าทำได้ดี' '- **ข้อดี:** 2 ข้อจากรีวิว' '- **ข้อควรรู้:** 1-2 ข้อจากรีวิว'")
+LIST_FULL_MAX = 15   # รายชื่อไม่เกินนี้ ใส่สเปกหลักทุกรุ่น / ยาวกว่านี้ใส่เฉพาะสเปกที่ลูกค้าถาม (คำตอบจะยาวเกินไป)
 
 TASKS = {
     "list": ("ไล่ชื่อ **ครบทุกรุ่นในรายการ ({n} รุ่น)** ตามลำดับเดิม ห้ามตัดหรือข้าม ห้ามเพิ่มรุ่นนอกรายการ "
-             "เริ่มด้วย 1 ประโยคบอกว่ามีทั้งหมดกี่รุ่น แล้วบรรทัดละรุ่น: '- **ชื่อรุ่นเต็ม** — ราคา X บาท — {spec}' "
-             "ปิดท้ายด้วย 1 ประโยคถามว่าอยากให้ช่วยเลือกหรือเทียบตัวไหนต่อ"),
-    "rank": ("รุ่นแรกในรายการคือคำตอบ (เรียงตามเกณฑ์ที่ลูกค้าถามแล้ว) บอกชื่อรุ่นเต็ม ค่าตามเกณฑ์ (คะแนนหรือราคา) และราคา "
-             "พร้อมเหตุผลสั้น ๆ 2-3 bullet จากสเปกและรีวิว ถ้ารุ่นต้น ๆ มีค่าเท่ากันให้บอกว่าเท่ากัน "
-             "แล้วบอกอันดับถัดไปอีก 2 รุ่นสั้น ๆ บรรทัดละรุ่น"),
-    "recommend": ("แนะนำ {n} รุ่นแรกในรายการ (ระบบเรียงตามความเหมาะสมแล้ว) ต่อรุ่นให้มี: **ชื่อรุ่นเต็ม — ราคา** (+ ส่วนต่างงบตามที่ระบบเขียน), "
-                  "เหตุผลสั้น ๆ จาก CPU GPU แรม ความจุ พร้อมระดับคะแนน, ข้อดีและข้อควรรู้จากรีวิว "
-                  "ถ้าแนะนำมากกว่า 1 รุ่น ปิดด้วย **สรุปเปรียบเทียบ** สั้น ๆ ถ้าลูกค้ายังไม่บอกการใช้งาน ให้ถามสั้น ๆ 1 ประโยคท้ายคำตอบ"),
-    "lookup": ("ตอบสิ่งที่ลูกค้าถามเกี่ยวกับรุ่นในรายการให้ตรงคำถาม ถ้าถามสเปกหรือขอละเอียด ให้ไล่ CPU, GPU, แรม, จอ, ความจุ, OS, "
-               "คะแนน CPU/GPU พร้อมระดับ และราคา ถ้าคำถามเลือกรุ่นตามเกณฑ์ (เช่น ตัวที่ถูกกว่า) ให้ตอบรุ่นแรกในรายการ"),
-    "compare": ("เทียบทุกรุ่นในรายการ: ราคา CPU GPU แรม จอ คะแนนพร้อมระดับ และจุดเด่นจากรีวิว แยกหัวข้อรุ่นละหัวข้อ "
-                "แล้วปิดด้วย **สรุปเปรียบเทียบ** ว่าแต่ละรุ่นเหมาะกับใคร{diff}"),
-    "overview": "ตอบจาก 'ข้อมูลร้าน' สั้น ๆ ตรงคำถาม แล้วถามการใช้งานหรืองบ 1 ประโยค",
+             "เริ่มด้วย 1 ประโยคบอกว่ามีทั้งหมดกี่รุ่น แล้วรุ่นละ 1 bullet: {list_line}"),
+    "rank": ("รุ่นแรกในรายการคือคำตอบ (เรียงตามเกณฑ์ที่ลูกค้าถามแล้ว) ถ้ารุ่นต้น ๆ มีค่าเท่ากันให้บอกว่าเท่ากัน "
+             "เขียนหัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** บอกค่าตามเกณฑ์ (คะแนนหรือราคา) แล้วตามด้วย " + FULL_SPEC +
+             " จากนั้นหัวข้อ **อันดับถัดไป** อีก 2 รุ่น บรรทัดละรุ่น: ชื่อรุ่นเต็ม — ราคา — ค่าตามเกณฑ์ — CPU / GPU"),
+    "recommend": ("แนะนำ {n} รุ่นแรกในรายการ (ระบบเรียงตามความเหมาะสมแล้ว) รุ่นละหัวข้อ "
+                  "**ชื่อรุ่นเต็ม — ราคา X บาท** (+ ส่วนต่างงบตามที่ระบบเขียน) แล้วตามด้วย " + FULL_SPEC +
+                  " ถ้าแนะนำมากกว่า 1 รุ่น ตามด้วย **สรุปเปรียบเทียบ** ว่าแต่ละรุ่นเด่นเรื่องไหน "
+                  "ถ้าลูกค้ายังไม่บอกการใช้งาน ให้ถามการใช้งานในส่วนคำแนะนำท้ายคำตอบ"),
+    "lookup": ("ตอบสิ่งที่ลูกค้าถามให้ตรงคำถามก่อนในประโยคแรก (ถ้าคำถามเลือกรุ่นตามเกณฑ์ เช่น ตัวที่ถูกกว่า ให้ตอบรุ่นแรกในรายการ) "
+               "แล้วให้รายละเอียดของรุ่นนั้นใต้หัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** ตามด้วย " + FULL_SPEC),
+    "compare": ("เทียบทุกรุ่นในรายการ รุ่นละหัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** ตามด้วย " + FULL_SPEC +
+                " แล้วปิดด้วย **สรุปเปรียบเทียบ**: ต่างกันตรงไหน (CPU GPU แรม จอ) และแต่ละรุ่นเหมาะกับใคร{diff}"),
+    "overview": ("ตอบตรงคำถามจาก 'ข้อมูลร้าน' ในประโยคแรก แล้วขยายให้น่าอ่าน: "
+                 "ถ้าถามราคาเริ่มต้น/ถูกสุด หรือราคาสูงสุด/แพงสุด ให้เขียนหัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** ของรุ่นนั้นจากรายการ "
+                 "ตามด้วย '- **สเปก:** ...' และ '- **จุดเด่น:** 1-2 ข้อจากรีวิว' / "
+                 "ถ้าถามยี่ห้อ ให้ไล่ทุกยี่ห้อพร้อมจำนวนรุ่นและช่วงราคา / ถ้าถามจำนวนรุ่น ให้บอกจำนวนแยกยี่ห้อด้วย "
+                 "แล้วปิดด้วย 1-2 ประโยคชวนบอกการใช้งานหรืองบ เพื่อช่วยเลือกรุ่นที่ใช่ (ไม่ต้องมีหัวข้อคำแนะนำ)"),
 }
 
 TEMPLATES = {
@@ -579,6 +598,16 @@ TEMPLATES = {
     "not_in_store": ("ขอโทษครับ ไม่มี{thing}ในข้อมูลที่ผมมีครับ ในร้านมียี่ห้อ Lenovo, Asus, MSI, Acer, HP, HyperX และ Gigabyte "
                      "ถ้าบอกงบและการใช้งาน ผมช่วยเลือกรุ่นที่ใกล้เคียงให้ได้ครับ"),
 }
+
+
+def _list_line(plan: dict, n: int) -> str:
+    """รูปแบบบรรทัดของคำตอบแบบรายชื่อ — รายชื่อสั้นใส่สเปกหลักครบ รายชื่อยาวใส่เฉพาะที่ลูกค้าถาม"""
+    if plan["detail"] or n <= LIST_FULL_MAX:
+        line = ("'- **ชื่อรุ่นเต็ม** — X บาท — CPU ... (ระดับ...) · GPU ... (ระดับ...) · แรม ... · ความจุ ... · จอ ...'")
+        if plan["detail"]:
+            line += " ต่อด้วยคะแนน CPU/GPU และจุดเด่นจากรีวิว 1 ข้อ"
+        return line
+    return f"'- **ชื่อรุ่นเต็ม** — X บาท — {_spec_hint(plan)}'"
 
 
 def _spec_hint(plan: dict) -> str:
@@ -621,7 +650,8 @@ def build_answer_prompt(plan: dict, picked: dict, question: str, history: list) 
         d = abs(items[0]["price"] - items[1]["price"])
         diff = f" และบอกส่วนต่างราคา {d:,} บาท (ระบบคำนวณแล้ว)"
     n = plan["limit"] or 1
-    task = TASKS[intent].format(n=len(items) if intent == "list" else n, spec=_spec_hint(plan), diff=diff)
+    task = TASKS[intent].format(n=len(items) if intent == "list" else n, diff=diff,
+                                list_line=_list_line(plan, len(items)))
     notes = "\n".join(f"- {x}" for x in picked["notes"]) or "-"
     return (f"บทสนทนาก่อนหน้า:\n{_history_text(history)}\n\n"
             f"คำถามลูกค้า: {question}\n"
@@ -656,7 +686,73 @@ def complete(provider: dict, messages: list, max_tokens: int, temperature: float
     return data["choices"][0]["message"].get("content") or "", data, time.perf_counter() - started
 
 
+_RE_DOUBLE_KRAB = re.compile(r"ครับ(?:[ \t]*ครับ)+")
+
+
+def tidy(text: str) -> str:
+    """เก็บกวาดคำตอบ: "ครับครับ" -> "ครับ" """
+    return _RE_DOUBLE_KRAB.sub("ครับ", text)
+
+
+def complete_stream(provider: dict, messages: list, max_tokens: int, temperature: float = 0.1,
+                    meta: dict | None = None):
+    """เหมือน complete() แต่ทยอยคืนข้อความทีละท่อนระหว่างที่ AI พิมพ์ (stream)
+    meta เก็บ usage / finish_reason / ความคิด / วินาที ไว้ให้โหมด debug หลังจบ"""
+    core = _core()
+    body = {"model": provider["model"], "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
+            "stream": True, "stream_options": {"include_usage": True}}
+    headers = {"Content-Type": "application/json"}
+    if provider.get("api_key"):
+        headers["Authorization"] = f"Bearer {provider['api_key']}"
+    url = f"{provider['base_url']}/chat/completions"
+    started = time.perf_counter()
+    try:
+        resp = requests.post(url, headers=headers, json=body, timeout=120, stream=True)
+        if resp.status_code == 400:   # endpoint บางตัวไม่รองรับ stream_options
+            resp.close()
+            body.pop("stream_options")
+            resp = requests.post(url, headers=headers, json=body, timeout=120, stream=True)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise core.LLMError(f"{provider['label']} error: {e} — เช็ค API key หรือ endpoint") from e
+    usage, finish, thinking = None, None, []
+    with resp:   # ลูกค้ากดหยุด -> generator ถูกปิด -> ตัดสายกับ AI ทันที
+        try:
+            for line in resp.iter_lines():
+                line = line.decode("utf-8", "replace")
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                chunk = json.loads(payload)
+                usage = chunk.get("usage") or usage
+                for ch in chunk.get("choices") or []:
+                    finish = ch.get("finish_reason") or finish
+                    delta = ch.get("delta") or {}
+                    thinking += [delta[k] for k in ("reasoning", "reasoning_content") if delta.get(k)]
+                    if delta.get("content"):
+                        yield delta["content"]
+        except requests.RequestException as e:
+            raise core.LLMError(f"{provider['label']} error: {e}") from e
+    if meta is not None:
+        meta.update({"seconds": time.perf_counter() - started, "usage": usage,
+                     "finish_reason": finish, "thinking": "".join(thinking)})
+
+
 def respond(plan: dict, question: str, history: list, provider: dict, trace: dict | None = None) -> str:
+    """ตอบแบบรอทั้งก้อน (/chat) — ใช้ขั้นตอนเดียวกับแบบสตรีม"""
+    result = {}
+    for _ in respond_stream(plan, question, history, provider, trace, result):
+        pass
+    return result["answer"]
+
+
+def respond_stream(plan: dict, question: str, history: list, provider: dict, trace: dict | None = None,
+                   result: dict | None = None):
+    """ทยอยส่งคำตอบ: yield {"type": "delta" | "replace", "text"} ระหว่างที่ AI พิมพ์
+    แล้วใส่คำตอบสุดท้ายไว้ที่ result["answer"]"""
+    result = {} if result is None else result
     intent = plan["intent"]
     if intent in TEMPLATED:
         thing = "รุ่นนั้น"
@@ -669,21 +765,39 @@ def respond(plan: dict, question: str, history: list, provider: dict, trace: dic
             trace["llm"] = {"provider": "ข้อความสำเร็จรูป (ไม่เรียก AI รอบสอง)", "model": intent,
                             "temperature": 0, "max_tokens": 0, "ms": 0, "usage": None,
                             "finish_reason": "stop", "thinking": "", "raw_chars": len(text)}
-        return text
+        result["answer"] = text
+        return
 
-    picked = select(plan, question, trace)
     if intent == "overview":
-        picked["items"] = []
+        cat = catalog()
+        ends = [min(cat, key=lambda x: x["price"]), max(cat, key=lambda x: x["price"])]
+        picked = {"items": ends, "total": len(cat), "missing": [], "source": "overview",
+                  "notes": ["รายการคือรุ่นที่ถูกที่สุดและแพงที่สุดในร้าน — ใช้เมื่อคำถามเกี่ยวกับราคาเริ่มต้นหรือราคาสูงสุด"]}
+        if trace is not None:
+            trace["context"] = [{"source": "overview", "kind": "spec", "text": lp["doc"]} for lp in ends]
+    else:
+        picked = select(plan, question, trace)
     prompt = build_answer_prompt(plan, picked, question, history)
-    max_tokens = 4000 if intent == "list" else 2000
+    max_tokens = 6000 if intent == "list" else 3000
     core = _core()
-    raw, data, secs = complete(provider, [{"role": "system", "content": ANSWER_RULES},
-                                          {"role": "user", "content": prompt}], max_tokens=max_tokens)
+    meta, raw, shown = {}, "", ""
+    for piece in complete_stream(provider, [{"role": "system", "content": ANSWER_RULES},
+                                            {"role": "user", "content": prompt}], max_tokens=max_tokens, meta=meta):
+        raw += piece
+        text = tidy(core.visible_answer(raw))
+        if text == shown:
+            continue
+        # ตัด <think> อาจทำให้ข้อความที่โชว์ไปแล้วหายไป -> ส่งทั้งก้อนแทน
+        yield ({"type": "delta", "text": text[len(shown):]} if text.startswith(shown)
+               else {"type": "replace", "text": text})
+        shown = text
     if trace is not None:
         trace["prompt"] = ANSWER_RULES + "\n\n" + prompt
+        data = {"choices": [{"message": {"reasoning": meta.get("thinking") or None},
+                             "finish_reason": meta.get("finish_reason")}], "usage": meta.get("usage")}
         trace["llm"] = {"provider": provider["label"], "model": provider["model"], "temperature": 0.1,
-                        "max_tokens": max_tokens, **core.llm_trace(data, raw, secs)}
-    return core.strip_think(raw) or core.EMPTY_ANSWER
+                        "max_tokens": max_tokens, **core.llm_trace(data, raw, meta.get("seconds", 0))}
+    result["answer"] = tidy(core.strip_think(raw)) or core.EMPTY_ANSWER
 
 
 def memory(plan: dict) -> dict:

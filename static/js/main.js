@@ -313,7 +313,7 @@ const SOURCE_NAME = {
   vector: 'ค้นเวกเตอร์', exact: 'ตรงชื่อรุ่น/สเปก', near_price: 'ราคาใกล้งบ',
   extreme: 'ถูก/แพงสุด', summary: 'ภาพรวมร้าน',
   // RAG รุ่น 2
-  filter: 'กรองตามเงื่อนไข', named: 'รุ่นที่ลูกค้าเอ่ยถึง', nearest: 'ราคาใกล้ที่สุด',
+  filter: 'กรองตามเงื่อนไข', named: 'รุ่นที่ลูกค้าเอ่ยถึง', nearest: 'ราคาใกล้ที่สุด', overview: 'ถูก/แพงสุดในร้าน',
 };
 const INTENT_NAME = {
   recommend: 'ขอคำแนะนำ', list: 'ขอรายชื่อรุ่น', rank: 'จัดอันดับ', lookup: 'ถามสเปกรุ่น', compare: 'เทียบรุ่น',

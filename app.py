@@ -1766,8 +1766,12 @@ def chat_stream():
 
         def events_v2():
             yield sse({"type": "status", "text": STATUS_WRITING})
+            result = {}
             try:
-                answer = rag_v2.respond(plan, user_msg, history, provider, trace)
+                # ทยอยส่งคำตอบระหว่างที่ AI พิมพ์ คำตอบยาวก็เริ่มเห็นข้อความได้ทันที
+                for ev in rag_v2.respond_stream(plan, user_msg, history, provider, trace, result):
+                    yield sse(ev)
+                answer = result["answer"]
             except LLMError as e:
                 yield sse({"type": "error", "error": str(e), **debug_part})
                 return

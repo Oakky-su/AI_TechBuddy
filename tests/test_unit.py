@@ -593,6 +593,16 @@ def test_rag_v2():
         p = plan(intent="recommend", filters=filters, usage=usage)
         v2.check_plan(p, q, [], None)
         check(R, f"แนะนำ หรือ ขอรายชื่อ «{q}»", want, p["intent"], "")
+    if hasattr(v2, "tidy"):   # คำตอบละเอียด + คำแนะนำท้ายคำตอบ + สตรีม
+        check(R, "เก็บกวาด ครับครับ", "ได้เลยครับ แล้วครับ", v2.tidy("ได้เลยครับครับ แล้วครับ ครับ"), "")
+        check(R, "รายชื่อสั้นใส่สเปกหลักครบ / ยาวใส่เฉพาะที่ถาม", (True, False),
+              ("CPU" in v2._list_line(plan(filters={"ram_gb": 24}), 13),
+               "CPU" in v2._list_line(plan(filters={"ram_gb": 16}), 30)), "")
+        check(R, "ภาพรวมร้านมีช่วงราคาแยกยี่ห้อ", True, "Lenovo 25 รุ่น (" in v2.store_stats(), "")
+        result = {}
+        events = list(v2.respond_stream(plan(intent="greeting"), "สวัสดี", [], {}, None, result))
+        check(R, "ทักทาย = ข้อความสำเร็จรูป ไม่สตรีม ไม่เรียก AI", ([], True),
+              (events, result["answer"].startswith("สวัสดีครับ")), "")
     mem = v2.memory(plan(filters={"ram_gb": 24}))
     check(R, "จำเงื่อนไขเฉพาะที่มีค่า (cookie เล็ก)", {"ram_gb": 24}, mem["filters"], "")
 
