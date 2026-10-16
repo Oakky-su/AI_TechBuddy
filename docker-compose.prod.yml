@@ -1,8 +1,9 @@
-# ค่าสำหรับรันจริง (deploy) — ต่างจาก docker-compose.yml ที่ใช้ตอนพัฒนา 4 จุด:
+# ค่าสำหรับรันจริง (deploy) — ต่างจาก docker-compose.yml ที่ใช้ตอนพัฒนา 5 จุด:
 #   1. ไม่ mount โค้ดจากเครื่อง  -> ใช้โค้ดที่อยู่ใน image เท่านั้น
-#   2. ไม่มี --reload            -> worker ไม่รีสตาร์ตเองกลางทาง
+#   2. ไม่มี --reload / --watch  -> worker ไม่รีสตาร์ตเองกลางทาง
 #   3. ENABLE_DEBUG=false        -> ปิด /debug ที่เปิดเผย prompt ทั้งก้อน
 #   4. บังคับให้ตั้ง SECRET_KEY  -> ไม่มีค่า default ให้เผลอใช้
+#   5. บังคับให้ตั้ง INTERNAL_TOKEN -> กันคนนอกยิง /internal/tools ด้วยค่า default
 #
 # ใช้งาน:  docker compose -f docker-compose.prod.yml up -d --build
 
@@ -12,21 +13,42 @@ services:
     restart: unless-stopped
     ports:
       - "5000:5000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - THAILLM_API_KEY=${THAILLM_API_KEY:?ต้องตั้ง THAILLM_API_KEY ใน .env ก่อน}
-      - THAILLM_BASE_URL=${THAILLM_BASE_URL:-http://thaillm.or.th/api/v1}
-      - THAILLM_MODEL=${THAILLM_MODEL:-openthaigpt-thaillm-8b-instruct-v7.2}
+      - THAILLM_API_KEY=${THAILLM_API_KEY:-}
+      - THAILLM_BASE_URL=${THAILLM_BASE_URL:-https://thaillm.or.th/api/v1}
+      - THAILLM_MODEL=${THAILLM_MODEL:-OpenThaiGPT-ThaiLLM-8B-Instruct-v7.2}
       - DISABLE_THINKING=${DISABLE_THINKING:-false}
       # ไม่มีค่า default — ถ้าไม่ตั้งจะรันไม่ขึ้น กันการใช้ค่า "change-me" โดยไม่รู้ตัว
       - SECRET_KEY=${SECRET_KEY:?ต้องตั้ง SECRET_KEY เป็นค่าสุ่มยาว ๆ ใน .env ก่อน}
+      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-ollama-gemma4}
+      - DEFAULT_ENGINE=${DEFAULT_ENGINE:-classic}
+      - PI_AGENT_URL=http://pi-agent:7070
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN:?ต้องตั้ง INTERNAL_TOKEN เป็นค่าสุ่มยาว ๆ ใน .env ก่อน}
       - ENABLE_DEBUG=false
       - FLASK_DEBUG=false
-      # จำกัดจำนวนข้อความต่อนาทีต่อ IP กันคนเดียวกินโควตา ThaiLLM หมด
+      # จำกัดจำนวนข้อความต่อนาทีต่อ IP กันคนเดียวกินโควตา LLM หมด
       - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-10}
-    command: gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 16 --timeout 120 app:app
+    command: gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 16 --timeout 180 app:app
+    depends_on:
+      - pi-agent
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:5000/')\""]
       interval: 60s
       timeout: 15s
       start_period: 180s
+      retries: 3
+
+  pi-agent:
+    build: ./pi-agent
+    restart: unless-stopped
+    environment:
+      - TOOLS_URL=http://teddy:5000
+      - INTERNAL_TOKEN=${INTERNAL_TOKEN:?ต้องตั้ง INTERNAL_TOKEN เป็นค่าสุ่มยาว ๆ ใน .env ก่อน}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:7070/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 60s
+      timeout: 10s
       retries: 3

@@ -10,14 +10,24 @@
 
 ## ความสามารถหลัก
 
-- **RAG แยกโควตาเอกสาร** — ค้นเอกสารสเปก 4 ชิ้น + รีวิว 3 ชิ้น แยกกัน แล้วแนบภาพรวมร้านทุกครั้ง
+- **RAG แยกโควตาเอกสาร** — ค้นเอกสารสเปก 6 ชิ้น + รีวิว 3 ชิ้น แยกกัน (ปรับได้ใน `.env`) แล้วแนบภาพรวมร้านทุกครั้ง
   เพื่อการันตีว่า AI เห็นราคาและสเปกเสมอ (ฐานข้อมูลมีรีวิวมากกว่าสเปก 3 เท่า ถ้าค้นรวมจะได้แต่รีวิว)
+- **กฎกรองตัวเลข (hybrid retrieval)** — การค้นตามความหมายแยก "แรม 16" กับ "แรม 24" ไม่ออก
+  และเห็นแค่ไม่กี่รุ่น โค้ดจึงอ่านเงื่อนไขจากคำถาม (การ์ดจอ แรม จัดอันดับคะแนน CPU/GPU ถูก/แพงสุดในกลุ่ม
+  รุ่นที่เกินงบ) แล้วกรองหรือเรียงจากข้อมูลจริงทั้ง 99 รุ่นก่อนส่งให้ AI — เปิด/ปิดที่ `HYBRID_FILTERS`
 - **กรองงบตั้งแต่ชั้นฐานข้อมูล** — อ่านงบจากประโยค (`งบ 2 หมื่น`, `งบ 20k`, `งบ 20000-25000`,
   `งบสามหมื่นห้า`) แล้วให้ Chroma กรองราคาตอน query ไม่ใช่ค้นมาแล้วค่อยทิ้ง
 - **ไม่แต่งตัวเลข** — ทุกราคาและคะแนนมาจากฐานข้อมูลจริง มีชุดทดสอบคอยจับ
 - **ส่วนต่างงบคำนวณด้วยโค้ด** — ไม่ปล่อยให้ LLM บวกลบเลขเอง เพราะพลาดได้
 - **รูปแบบคำตอบคงที่** — เหตุผล (CPU/GPU/RAM/STORAGE/ราคา) → สรุปเบนช์มาร์ก → ข้อดี → ข้อเสีย
 - **หน้าเว็บธีมแดง** — โหมดสว่าง/มืด, เรนเดอร์ Markdown, ประวัติแชทพร้อมปุ่มลบ
+- **เปลี่ยน AI ได้จากหน้าเว็บ** — เมนูมุมบนเลือกโมเดล (รายการอยู่ใน `providers.json`) และสวิตช์
+  โหมด Pi Agent / RAG แบบเดิม ใต้คำตอบทุกข้อบอกว่าโมเดลไหนตอบ ค้นเพิ่มกี่ครั้ง ใช้เวลาเท่าไหร่
+- **Pi Agent ([pi.dev](https://pi.dev))** (ปิดอยู่ — ตอนนี้ใช้ RAG อย่างเดียว เปิดได้ที่ `ALLOWED_ENGINES`)
+  — ใช้ agent loop ของ pi (`@earendil-works/pi-agent-core`)
+  ให้ AI เรียก tool ค้นข้อมูลเพิ่มเองได้หลายรอบ (กรองตามสเปก / ค้นรีวิว / ดูรายละเอียดรุ่น)
+  โดยเริ่มจากข้อมูลชุดเดียวกับโหมด RAG เสมอ คำตอบจึงไม่แย่กว่าเดิม แต่ตอบคำถามแบบ
+  "RTX 4060 มีรุ่นไหนบ้าง" หรือ "เทียบรุ่น A กับ B" ได้ครบขึ้น
 
 ---
 
@@ -28,21 +38,42 @@
 | Web | Flask 3.0 + Gunicorn |
 | Embedding | `BAAI/bge-m3` (หลายภาษา, 1024 มิติ) |
 | Vector DB | ChromaDB (Persistent) |
-| LLM | OpenThaiGPT 8B ผ่าน ThaiLLM API |
+| LLM | เลือกได้: Wave AI · Gemma 4 31B (ค่าเริ่มต้น) / OpenThaiGPT 8B (ThaiLLM) / Claude / GPT / Gemini |
+| Agent | pi (`@earendil-works/pi-agent-core` + `pi-ai` 1.2) บน Node 22 — service `pi-agent` |
 | Frontend | HTML + Vanilla JS + CSS |
-| Container | Docker + Docker Compose |
+| Container | Docker + Docker Compose (2 service: `teddy`, `pi-agent`) |
+
+```
+เบราว์เซอร์ ──/chat──▶ teddy (Flask) ── ค้น Chroma รอบแรก ──┬─ classic ──▶ LLM ──▶ คำตอบ
+                                                            └─ pi ──▶ pi-agent ──▶ LLM
+                                                                         │  ▲
+                                         teddy /internal/tools ◀── tool ─┘  │ วนจนได้คำตอบ
+```
 
 ---
 
 ## เริ่มใช้งาน
 
-```bash
-cp .env.example .env     # ใส่ THAILLM_API_KEY
-docker compose up --build
-# เปิด http://localhost:5000
-```
+ค่าตั้งทุกอย่าง (API key, วิธีค้น, โหมด, หน้าเว็บ) อยู่ใน `.env` ไฟล์เดียว ไม่ต้องแก้โค้ด
+
+1. `cp .env.example .env`
+2. เปิด `.env` ใส่ `OLLAMA_API_KEY` (หรือ key ของ AI ตัวอื่นในหัวข้อ 1) และตั้ง `SECRET_KEY`, `INTERNAL_TOKEN` เป็นค่าสุ่ม
+3. `docker compose up --build` แล้วเปิด http://localhost:5000
+
+แก้ `.env` ทีหลัง สั่ง `docker compose up -d` ให้แอปรับค่าใหม่ (ไม่ต้อง build ใหม่)
 
 > ครั้งแรกใช้เวลานาน เพราะต้องโหลดโมเดล bge-m3 (~2 GB) และสร้าง vector index ตอน build
+
+### เลือกวิธีค้น (ทางเลือก RAG)
+
+| ทางเลือก | ตั้งใน `.env` |
+|---|---|
+| RAG ค้นตามความหมายอย่างเดียว | `HYBRID_FILTERS=false` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
+| RAG ดึงสเปกเยอะขึ้น ไม่ดึงรีวิว | `HYBRID_FILTERS=false` `TOP_K_SPEC=15` `TOP_K_REVIEW=0` |
+| RAG + กฎกรองตัวเลข (ค่าเริ่มต้น) | `HYBRID_FILTERS=true` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
+| Agentic RAG (AI เรียกเครื่องมือค้นเพิ่มเอง) | `ALLOWED_ENGINES=` ว่าง + `DEFAULT_ENGINE=pi` |
+
+ผลทดสอบของแต่ละทางเลือกอยู่ในเอกสาร "ข้อจำกัดของ RAG" — วัดซ้ำได้ด้วย `tests/test_question_types.py`
 
 รันบนเครื่องโดยตรง:
 
@@ -52,6 +83,31 @@ python build_index.py    # สร้าง vector index (รันครั้�
 python app.py
 ```
 
+### เปิดออกอินเทอร์เน็ต (Cloudflare Tunnel)
+
+ใช้สแตก [cf-tunnel-panel](https://github.com/WaveCC2/cf-tunnel-panel) (cloudflared + Traefik + panel ที่สร้าง DNS ให้เอง)
+รันสแตกนั้นก่อน แล้วรัน Tech Buddy คู่กับ `docker-compose.tunnel.yml`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d
+```
+
+หรือใส่ใน `.env` แล้วสั่ง `docker compose up -d` ธรรมดาได้เลย (กันลืมแล้วเว็บสาธารณะหลุด):
+
+```
+COMPOSE_FILE=docker-compose.yml;docker-compose.tunnel.yml
+COMPOSE_PATH_SEPARATOR=;
+TECHBUDDY_HOST=techbuddy.example.com   # ค่าเริ่มต้น techbuddy.pemaai.online
+PUBLIC_RATE_LIMIT_PER_MIN=20
+```
+
+ไฟล์ tunnel ปิด `/debug`, ใช้ rate limit จริง, ผูกพอร์ต 5000 ไว้แค่ localhost และให้ Traefik
+ไม่ส่ง `/internal` กับ `/debug` ต่อให้แอปเลย — ตอนเปิดโหมดนี้ `tests/test_api.py` จะโดน 429
+เพราะ rate limit ต่ำ ให้รันเทสต์ด้วย `docker compose -f docker-compose.yml up -d` (โหมดพัฒนา) แทน
+
+> ⚠️ cf-tunnel-panel ล็อก `traefik:v3.1` ไว้ ซึ่งคุยกับ Docker Engine 29+ ไม่ได้ (ทุกหน้าได้ 404)
+> ต้องแก้เป็น `traefik:v3.6` ใน docker-compose.yml ของสแตกนั้น
+
 ---
 
 ## API
@@ -60,8 +116,42 @@ python app.py
 |---|---|---|
 | `GET` | `/` | หน้าแชท |
 | `POST` | `/chat` | `{"message": "..."}` → `{"message": "..."}` |
+| `POST` | `/chat/stream` | body เดียวกับ `/chat` แต่ตอบเป็น Server-Sent Events (หน้าเว็บใช้อันนี้) |
+| `POST` | `/chat/commit` | `{"token": "..."}` จาก event `done` → บันทึกคำถาม-คำตอบลง session |
 | `POST` | `/new_chat` | ล้างประวัติและงบที่จำไว้ |
 | `POST` | `/restore` | โหลดบทสนทนาเก่ากลับเข้า session |
+| `GET` | `/providers` | รายการ AI ที่เลือกได้ (ไม่มี API key) |
+| `POST` | `/internal/tools/<ชื่อ>` | tool ให้ pi-agent เรียก — ต้องแนบ header `X-Internal-Token` |
+
+`/chat` รับ `provider` (id ใน `providers.json`) และ `engine` (`pi` / `classic`) เพิ่มได้
+ไม่ส่งมา = ใช้ค่าเริ่มต้นใน `.env` และคืน `meta` บอกว่าใครตอบ ใช้ tool อะไร ใช้เวลาเท่าไหร่
+
+`/chat/stream` ส่ง event `status` (เช่น "กำลังกรองสเปก: RTX 4060 · ไม่เกิน 40,000 บาท…"),
+`delta` / `replace` (คำตอบโหมด Pi Agent ที่กำลังพิมพ์ — ตัด `<think>` แล้ว), แล้วจบด้วย `done`
+(คำตอบ + `meta` + `commit`) หรือ `error` — ประวัติแชทต้องบันทึกผ่าน `/chat/commit` แยก เพราะ
+cookie ของ session ถูกส่งไปตั้งแต่ event แรก ก่อนจะรู้คำตอบ (โหมด classic ส่งคำตอบทีเดียวใน `done`)
+
+### โหมด Debug (กระบวนการคิดของ AI)
+
+ตั้ง `DEBUG_PANEL=true` แล้วทุกคำตอบจะมีปุ่ม **กระบวนการคิด** ในบรรทัดเล็กใต้คำตอบ
+กดแล้วแผงด้านขวาเลื่อนออกมาโชว์ว่าคำตอบนั้นคิดยังไง (จอกว้างวางข้างแชท จอแคบลอยทับ, กดซ้ำหรือ X = ปิด)
+ไม่มีสวิตช์บนหน้าเว็บ — เปิด/ปิดทั้งระบบที่ `.env` อย่างเดียว
+
+แผงไล่ตามลำดับที่ระบบทำจริง: ตีความคำถาม (งบ ช่วงราคา การ์ดจอ/ชื่อรุ่นที่จับได้) →
+embed ด้วย bge-m3 (เวลา + ตัวอย่างเวกเตอร์) → ผลค้นแต่ละรอบพร้อมความใกล้เคียง (cosine) →
+กฎที่ปรับผลค้น → เอกสารที่ส่งให้ AI พร้อมที่มา → prompt ทั้งก้อน → เวลา/โทเคน/ความคิดของ AI (ถ้าโมเดลส่งมา)
+
+เบื้องหลังคือส่ง `"debug": true` ไปกับ `/chat` หรือ `/chat/stream` แล้วข้อมูลจะมาใน `debug`
+ของ event `done` / `error` — ตอน `DEBUG_PANEL=false` เซิร์ฟเวอร์ไม่สนค่านี้ (`/providers` บอกสถานะใน `debug`)
+
+### เพิ่ม AI ตัวใหม่
+
+เพิ่มรายการใน `providers.json` แล้วรีสตาร์ต `teddy` (ไม่ต้อง build ใหม่)
+
+- endpoint แบบ OpenAI (vLLM, Ollama, LM Studio ฯลฯ) → `"kind": "openai-compatible"` + `base_url` + `model`
+- provider ที่ pi รู้จักในตัว → `"kind": "pi-builtin"` + `pi_provider` + `model` (ดูรายชื่อที่
+  [pi.dev/docs](https://pi.dev/docs/latest)) ใช้ได้เฉพาะโหมด Pi Agent
+- ใส่ `api_key_env` เป็นชื่อตัวแปรใน `.env` — ถ้า `key_required` แล้วยังไม่ตั้ง ตัวเลือกจะเป็นสีเทา
 
 ---
 
@@ -73,7 +163,10 @@ build_index.py      แปลง laptops.json เป็น vector index (397 เ
 laptops.json        ข้อมูลสินค้า 99 รุ่น
 templates/          หน้าเว็บ
 static/             CSS (ตัวแปรสีอยู่บนสุด) + JS
-tests/              ชุดทดสอบ 5 ไฟล์
+llm_providers.py    อ่าน providers.json + .env -> รายการ AI ที่เลือกได้
+providers.json      รายการ AI (เพิ่ม/ลบโมเดลที่นี่)
+pi-agent/           service Node ที่รัน agent ของ pi + tool 3 ตัว
+tests/              ชุดทดสอบ (test_unit / test_question_types / test_api / ...)
 ```
 
 > ⚠️ แก้ `laptops.json` แล้วต้องรัน `python build_index.py` ใหม่ ไม่งั้นบอทยังใช้ข้อมูลเดิม
@@ -83,9 +176,13 @@ tests/              ชุดทดสอบ 5 ไฟล์
 ## ทดสอบ
 
 ```bash
-PYTHONIOENCODING=utf-8 python tests/test_unit.py          # 66 เคส ไม่ต้องใช้โมเดล
+PYTHONIOENCODING=utf-8 python tests/test_unit.py          # ไม่ต้องใช้โมเดล (ส่วนที่ต้องใช้ Chroma ข้ามเองถ้าไม่มี)
 PYTHONIOENCODING=utf-8 python tests/test_api.py           # ต้องมีแอปรันอยู่
 PYTHONIOENCODING=utf-8 python tests/test_hallucination.py # เช็คว่า AI แต่งตัวเลขไหม
+
+# ถามจริง 25 หมวด (ถูก/แพงสุด การ์ดจอ แรม คะแนน CPU/GPU งบ เทียบรุ่น นอกเรื่อง ...) แล้วตรวจกับ laptops.json
+# ต้องมีแอปรันอยู่ / QT_ENGINE=classic|pi เลือกโหมด / QT_OUT=ไฟล์ บันทึกคำตอบเต็ม
+PYTHONIOENCODING=utf-8 python tests/test_question_types.py http://localhost:5000
 
 # ชั้น retrieval ต้องรันในที่ที่มี chromadb
 docker cp tests/test_retrieval.py ai_teddy-teddy-1:/app/
@@ -98,9 +195,22 @@ docker exec ai_teddy-teddy-1 python /app/test_retrieval.py
 
 | ตัวแปร | ค่าเริ่มต้น | คำอธิบาย |
 |---|---|---|
-| `THAILLM_API_KEY` | **(บังคับ)** | API Key จาก ThaiLLM |
-| `THAILLM_MODEL` | `openthaigpt-thaillm-8b-instruct-v7.2` | ชื่อโมเดล |
-| `DISABLE_THINKING` | `false` | `true` = ตอบเร็วและนิ่งขึ้น แต่คุณภาพลด |
+| `DEFAULT_PROVIDER` | `ollama-gemma4` | AI เริ่มต้น (id ใน `providers.json`) |
+| `VISIBLE_PROVIDERS` | ว่าง (ทุกตัว) | id ที่เปิดให้เลือกบนเว็บ คั่นด้วยจุลภาค ตัวอื่นซ่อนจากเมนูและเรียกผ่าน `/chat` ไม่ได้ (รัน `tests/compare_models.py` กับตัวที่ซ่อน ต้องเอาออกจากค่านี้ก่อน) |
+| `OLLAMA_API_KEY` | — | key ของ Ollama Cloud (ollama.com/settings) สำหรับ `ollama-gemma4` |
+| `HYBRID_FILTERS` | `true` | `true` = เปิดกฎกรองตัวเลข (แรม จัดอันดับคะแนน ถูก/แพงสุดในกลุ่ม รุ่นที่เกินงบ ไล่รายชื่อครบ) / `false` = RAG ค้นตามความหมายอย่างเดียว |
+| `TOP_K_SPEC` | `6` | จำนวนเอกสารสเปกที่ค้นมาให้ AI ต่อคำถาม |
+| `TOP_K_REVIEW` | `3` | จำนวนเอกสารรีวิวต่อคำถาม (`0` = ไม่ดึงรีวิว) |
+| `DEFAULT_ENGINE` | `classic` | `classic` = RAG ค้นรอบเดียว / `pi` = agentic (Pi Agent) |
+| `ALLOWED_ENGINES` | `classic` | โหมดที่เปิดให้ใช้ — `classic` = RAG อย่างเดียว หน้าเว็บไม่มีปุ่มสลับโหมด / ว่าง = ทั้งสองโหมด (ต้องมี service `pi-agent`) |
+| `RATE_LIMIT_PER_MIN` | `1000` (พัฒนา) | ข้อความต่อนาทีต่อคน — เปิดผ่าน tunnel ใช้ `PUBLIC_RATE_LIMIT_PER_MIN` (ค่าเริ่มต้น 20) |
+| `DEBUG_PANEL` | `false` | `true` = ทุกคำตอบมีปุ่ม "กระบวนการคิด" เปิดแผงด้านขวาที่โชว์ว่าคำตอบนั้นคิดยังไง (ดูหัวข้อโหมด Debug) — ทุกคนที่เข้าเว็บกดดูได้รวม prompt ทั้งก้อน ปิดก่อนเปิดให้คนทั่วไปใช้ |
+| `BMS_LLM_BASE_URL` | `https://qwen-llm.bmscloud.in.th/v1` | endpoint LLM ของเรา |
+| `BMS_LLM_MODEL` | `gemma-4-31b` | ชื่อโมเดลบน endpoint นั้น |
+| `THAILLM_API_KEY` | — | ใส่แล้วตัวเลือก ThaiLLM จะใช้ได้ |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | — | ใส่แล้วตัวเลือกนั้นจะใช้ได้ (โหมด Pi Agent) |
+| `DISABLE_THINKING` | `false` | `true` = ThaiLLM ตอบเร็วและนิ่งขึ้น แต่คุณภาพลด |
 | `SECRET_KEY` | สุ่มชั่วคราว | ถ้าไม่ตั้ง ประวัติจะหายทุกครั้งที่รีสตาร์ต |
+| `INTERNAL_TOKEN` | `dev-internal-token` | รหัสลับระหว่าง pi-agent กับ teddy (prod บังคับตั้ง) |
 
 ดูทั้งหมดใน `.env.example`

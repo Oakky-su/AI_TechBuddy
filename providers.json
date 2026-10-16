@@ -1,0 +1,115 @@
+{
+  "_คำอธิบาย": [
+    "รายการ AI ที่ผู้ใช้เลือกได้จากหน้าเว็บ — เพิ่ม/ลบได้ที่ไฟล์นี้ไฟล์เดียว (แก้แล้วรีสตาร์ต teddy)",
+    "kind=openai-compatible : endpoint แบบ OpenAI (vLLM, Ollama, ThaiLLM ฯลฯ) ใช้ได้ทั้งโหมด Pi Agent และ RAG แบบเดิม",
+    "kind=pi-builtin        : ใช้ provider ที่ pi รู้จักอยู่แล้ว (openai/anthropic/google ฯลฯ) ใช้ได้เฉพาะโหมด Pi Agent",
+    "*_env                  : อ่านค่าจาก environment ก่อน ถ้าไม่ตั้งค่อยใช้ค่าในไฟล์นี้",
+    "key_required=true      : ถ้ายังไม่ตั้ง API key ตัวเลือกจะขึ้นเป็นสีเทา กดเลือกไม่ได้"
+  ],
+  "providers": [
+    {
+      "id": "wave-ai",
+      "label": "Wave AI · Gemma 4 31B",
+      "short": "Wave AI",
+      "kind": "openai-compatible",
+      "base_url": "https://qwen-llm.bmscloud.in.th/v1",
+      "base_url_env": "BMS_LLM_BASE_URL",
+      "model": "gemma-4-31b",
+      "model_env": "BMS_LLM_MODEL",
+      "api_key_env": "BMS_LLM_API_KEY",
+      "key_required": false,
+      "context_window": 65536,
+      "max_tokens": 3072
+    },
+    {
+      "id": "thaillm",
+      "label": "ThaiLLM · OpenThaiGPT 8B",
+      "short": "OpenThaiGPT 8B",
+      "kind": "openai-compatible",
+      "base_url": "https://thaillm.or.th/api/v1",
+      "base_url_env": "THAILLM_BASE_URL",
+      "model": "OpenThaiGPT-ThaiLLM-8B-Instruct-v7.2",
+      "model_env": "THAILLM_MODEL",
+      "api_key_env": "THAILLM_API_KEY",
+      "key_required": true,
+      "context_window": 32768,
+      "max_tokens": 1536,
+      "think_tags": true
+    },
+    {
+      "id": "thaillm-typhoon",
+      "label": "ThaiLLM · Typhoon-S 8B",
+      "short": "Typhoon-S 8B",
+      "kind": "openai-compatible",
+      "base_url": "https://thaillm.or.th/api/v1",
+      "base_url_env": "THAILLM_BASE_URL",
+      "model": "Typhoon-S-ThaiLLM-8B-Instruct",
+      "api_key_env": "THAILLM_API_KEY",
+      "key_required": true,
+      "context_window": 32768,
+      "max_tokens": 1536
+    },
+    {
+      "_note": "Ollama Cloud: ใช้ API key จาก ollama.com/settings / โมเดลบนคลาวด์ใช้ชื่อตาม ollama.com/api/tags (gemma4:31b) / ราคา gemma4 = $0.14 ต่อ 1M token ขาเข้า, $0.40 ต่อ 1M token ขาออก",
+      "id": "ollama-gemma4",
+      "label": "Ollama Cloud · Gemma 4 31B",
+      "short": "Gemma 4 31B (Ollama)",
+      "kind": "openai-compatible",
+      "base_url": "https://ollama.com/v1",
+      "base_url_env": "OLLAMA_BASE_URL",
+      "model": "gemma4:31b",
+      "api_key_env": "OLLAMA_API_KEY",
+      "key_required": true,
+      "context_window": 65536,
+      "max_tokens": 3072
+    },
+    {
+      "_note": "Gemini API ไม่มี Gemma 12B แล้ว (gemma-3-12b-it = 404) ตัวเล็กสุดที่มีคือ 26B A4B (ใช้งานจริงราว 4B ต่อ token) / ช่องทางแบบ OpenAI ของ Gemini ตอบ 500 กับ Gemma จึงใช้ผ่าน pi (API หลักของ Google) ได้เฉพาะโหมด Pi Agent",
+      "id": "gemma-26b",
+      "label": "Google · Gemma 4 26B (A4B)",
+      "short": "Gemma 4 26B",
+      "kind": "pi-builtin",
+      "pi_provider": "google",
+      "model": "gemma-4-26b-a4b-it",
+      "api_key_env": "GEMINI_API_KEY",
+      "key_required": true,
+      "max_tokens": 3072
+    },
+    {
+      "id": "claude-sonnet",
+      "label": "Anthropic · Claude Sonnet 5.5",
+      "short": "Claude Sonnet 5.5",
+      "kind": "pi-builtin",
+      "pi_provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "key_required": true,
+      "thinking": "low",
+      "max_tokens": 4096
+    },
+    {
+      "id": "openai-gpt",
+      "label": "OpenAI · GPT-5.4 mini",
+      "short": "GPT-5.4 mini",
+      "kind": "pi-builtin",
+      "pi_provider": "openai",
+      "model": "gpt-5.4-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "key_required": true,
+      "thinking": "low",
+      "max_tokens": 4096
+    },
+    {
+      "id": "gemini-flash",
+      "label": "Google · Gemini 3.5 Flash",
+      "short": "Gemini 3.5 Flash",
+      "kind": "pi-builtin",
+      "pi_provider": "google",
+      "model": "gemini-3.5-flash",
+      "api_key_env": "GEMINI_API_KEY",
+      "key_required": true,
+      "thinking": "low",
+      "max_tokens": 4096
+    }
+  ]
+}

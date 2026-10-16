@@ -1,6 +1,8 @@
 # ชุดทดสอบ logic ล้วน (ไม่ต้องใช้โมเดล/API) — รัน: python tests/test_unit.py
-# ครอบคลุม: extract_budget(), strip_think(), laptops_to_documents(), ความสมบูรณ์ของ laptops.json
+# ครอบคลุม: extract_budget(), strip_think(), laptops_to_documents(), ความสมบูรณ์ของ laptops.json,
+#          รายการ AI (llm_providers) และ tool ของ Pi Agent ที่ไม่ต้องใช้ vector DB
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -12,8 +14,13 @@ sys.path.insert(0, str(BASE))
 if "chromadb" not in sys.modules:
     stub = types.ModuleType("chromadb")
     stub.PersistentClient = lambda *a, **k: None
+    stub.IS_STUB = True
     sys.modules["chromadb"] = stub
 
+import os  # noqa: E402
+
+import app  # noqa: E402
+import llm_providers as llm  # noqa: E402
 from app import extract_budget, strip_think  # noqa: E402
 from build_index import laptops_to_documents  # noqa: E402
 
@@ -160,11 +167,446 @@ def test_data():
               sum(1 for lp in laptops if isinstance(lp.get("benchmark", {}).get(k), int)), "")
 
 
+# ─────────────────────────────────────────────────────────────
+# 5. llm_providers — รายการ AI ที่สลับได้จากหน้าเว็บ
+# ─────────────────────────────────────────────────────────────
+KEY_VARS = ("BMS_LLM_API_KEY", "THAILLM_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+            "GEMINI_API_KEY", "BMS_LLM_BASE_URL", "DEFAULT_PROVIDER", "DEFAULT_ENGINE",
+            "VISIBLE_PROVIDERS", "OLLAMA_API_KEY", "ALLOWED_ENGINES")
+
+
+def test_providers():
+    saved = {k: os.environ.pop(k, None) for k in KEY_VARS}
+    try:
+        by_id = {p["id"]: p for p in llm.load_providers()}
+        check("providers", "Wave AI ใช้ได้โดยไม่ต้องมี key", True, by_id["wave-ai"]["available"], "")
+        check("providers", "ThaiLLM ไม่มี key = ใช้ไม่ได้", False, by_id["thaillm"]["available"], "")
+        check("providers", "Claude ไม่มี key = ใช้ไม่ได้", False, by_id["claude-sonnet"]["available"], "")
+        check("providers", "pi-builtin ใช้ได้เฉพาะโหมด pi", ["pi"], by_id["claude-sonnet"]["engines"], "")
+        check("providers", "openai-compatible ใช้ได้ทั้ง 2 โหมด", ["pi", "classic"],
+              by_id["wave-ai"]["engines"], "")
+        check("providers", "ไม่ตั้ง DEFAULT_PROVIDER -> ตัวแรกที่ใช้ได้", "wave-ai",
+              llm.public_list()["default_provider"], "")
+
+        _, _, err = llm.pick("thaillm", "classic")
+        check("providers", "เลือกตัวที่ยังไม่มี key -> error", True, bool(err) and "THAILLM_API_KEY" in err, "")
+        _, _, err = llm.pick("no-such-ai", "pi")
+        check("providers", "id ที่ไม่มี -> error", True, bool(err), "")
+
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test-secret"
+        _, _, err = llm.pick("claude-sonnet", "classic")
+        check("providers", "pi-builtin + classic -> error", True, bool(err) and "Pi Agent" in err, "")
+        provider, engine, err = llm.pick("claude-sonnet", "pi")
+        check("providers", "pi-builtin + pi -> ผ่าน", (None, "pi"), (err, engine), "")
+        check("providers", "/providers ไม่มี API key หลุด", False,
+              "sk-test-secret" in json.dumps(llm.public_list()), "สำคัญ: รายการนี้ส่งถึงเบราว์เซอร์")
+        check("providers", "config ที่ส่ง pi-agent มี key", "sk-test-secret",
+              llm.agent_config(provider).get("api_key"), "")
+
+        os.environ["BMS_LLM_BASE_URL"] = "http://example.test/v1/"
+        bms = next(p for p in llm.load_providers() if p["id"] == "wave-ai")
+        check("providers", "env ทับ base_url + ตัด / ท้าย", "http://example.test/v1", bms["base_url"], "")
+
+        os.environ["VISIBLE_PROVIDERS"] = "wave-ai"
+        listed = [p["id"] for p in llm.public_list()["providers"]]
+        check("providers", "VISIBLE_PROVIDERS ซ่อนตัวอื่นจากเมนู", ["wave-ai"], listed, "")
+        _, _, err = llm.pick("claude-sonnet", "pi")
+        check("providers", "ตัวที่ซ่อนเรียกผ่าน /chat ไม่ได้", True, bool(err) and "ไม่ได้เปิดให้ใช้" in err, "")
+        os.environ.pop("VISIBLE_PROVIDERS")
+
+        os.environ["ALLOWED_ENGINES"] = "classic"
+        lst = llm.public_list()
+        wave = next(p for p in lst["providers"] if p["id"] == "wave-ai")
+        check("engines", "ALLOWED_ENGINES=classic -> เหลือโหมดเดียว", (["classic"], ["classic"], "classic"),
+              (lst["engines"], wave["engines"], lst["default_engine"]), "")
+        _, engine, err = llm.pick("wave-ai", "pi")
+        check("engines", "ขอ pi ตอนปิดไว้ -> ใช้ classic แทนเงียบ ๆ", ("classic", None), (engine, err), "")
+        os.environ["ANTHROPIC_API_KEY"] = "sk-test"
+        claude = next(p for p in llm.load_providers() if p["id"] == "claude-sonnet")
+        check("engines", "AI ที่ใช้ได้แค่ pi -> ใช้ไม่ได้ตอนปิด pi", False, claude["available"], "")
+        os.environ["ALLOWED_ENGINES"] = "nonsense"
+        check("engines", "ค่าแปลก -> เปิดทั้งสองโหมด", ["pi", "classic"], llm.allowed_engines(), "")
+        os.environ.pop("ALLOWED_ENGINES")
+
+        os.environ["DEFAULT_ENGINE"] = "classic"
+        check("providers", "DEFAULT_ENGINE=classic", "classic", llm.default_engine(), "")
+        os.environ["DEFAULT_ENGINE"] = "weird"
+        check("providers", "DEFAULT_ENGINE แปลก -> pi", "pi", llm.default_engine(), "")
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. tool ของ Pi Agent ที่ไม่ต้องใช้ vector DB
+# ─────────────────────────────────────────────────────────────
+def test_tools():
+    laptops = json.loads((BASE / "laptops.json").read_text(encoding="utf-8"))
+    app._spec_doc_by_name = {}   # ไม่มี Chroma บนเครื่อง host -> tool ใช้ชื่อรุ่นแทนเอกสารสเปก
+
+    check("tools", "_int_arg รับ '25,000'", 25000, app._int_arg({"x": "25,000"}, "x"), "")
+    check("tools", "_int_arg รับ 25000.0", 25000, app._int_arg({"x": 25000.0}, "x"), "")
+    check("tools", "_int_arg ค่าว่าง = None", None, app._int_arg({"x": ""}, "x"), "")
+    check("tools", "_ram_gb('16 GB DDR5')", 16, app._ram_gb("16 GB DDR5 5600 MHz"), "")
+    check("tools", "_limit_arg เพดาน 15", 15, app._limit_arg({"limit": 99}, 8), "")
+
+    # กรอง RTX 4060 งบ 40,000 ต้องได้ "ทุก" รุ่นที่ตรง (vector search ทำแบบนี้ไม่ได้)
+    want = [lp for lp in laptops if "rtx 4060" in lp["spec"]["GPU"].lower() and lp["ราคา"] <= 40000]
+    text = app.tool_filter_laptops({"gpu": "RTX 4060", "max_price": 40000, "limit": 15})
+    if want:
+        check("tools", "filter: นับจำนวนรุ่นถูก", True, text.startswith(f"พบ {len(want)} รุ่น"), text[:60])
+        check("tools", "filter: มีทุกรุ่นที่ตรง", True,
+              all(lp["ชื่อสินค้า"] in text for lp in want[:15]), "")
+    else:
+        check("tools", "filter: ไม่เจอ -> บอกตรง ๆ", True, text.startswith("ไม่พบรุ่น"), text[:60])
+
+    cheapest = min(laptops, key=lambda lp: lp["ราคา"])["ชื่อสินค้า"]
+    text = app.tool_filter_laptops({"sort_by": "price_asc", "limit": 1})
+    check("tools", "filter: เรียงถูกสุดก่อน", True, cheapest in text, "")
+    text = app.tool_filter_laptops({"max_price": 1})
+    check("tools", "filter: ไม่มีรุ่นในงบ", True, text.startswith("ไม่พบรุ่น"), "")
+
+    try:
+        app.tool_get_laptop_details({"name": ""})
+        check("tools", "details: ไม่ใส่ชื่อ -> ValueError", True, False, "")
+    except ValueError:
+        check("tools", "details: ไม่ใส่ชื่อ -> ValueError", True, True, "")
+    text = app.tool_get_laptop_details({"name": "MacBook Air M9"})
+    check("tools", "details: ชื่อที่ไม่มี -> ไม่พบ + เสนอชื่อใกล้เคียง", True, text.startswith("ไม่พบรุ่น"), "")
+
+    # ระดับคะแนนต้องตรงเกณฑ์ใน SYSTEM_PROMPT รวมขอบช่วง
+    for score, want in ((17_999, "เริ่มต้น"), (18_000, "กลาง"), (25_000, "กลาง-สูง"),
+                        (32_000, "กลาง-สูง"), (32_001, "สูง"), (49_500, "สูง")):
+        check("levels", f"CPU {score:,}", want, app.score_level(score, app.CPU_LEVELS), "")
+    for score, want in ((3_999, "เริ่มต้น"), (6_500, "เริ่มต้น-กลาง"), (10_500, "กลาง-สูง"),
+                        (14_000, "กลาง-สูง"), (14_500, "สูง")):
+        check("levels", f"GPU {score:,}", want, app.score_level(score, app.GPU_LEVELS), "")
+    spec = "X ราคา 30,990 บาท | ซีพียู (CPU): i5 | คะแนนเบนช์มาร์ก CPU 18776 / GPU 10500"
+    check("levels", "with_levels ต่อท้ายเอกสารสเปก", True,
+          app.with_levels(spec).endswith("CPU = กลาง / GPU = กลาง-สูง"), "")
+    review = "รีวิวจากผู้ใช้รุ่น X ราคา 30,990 บาท (คะแนนเบนช์มาร์ก CPU 18776 / GPU 10500): ดี"
+    check("levels", "with_levels ไม่แตะเอกสารรีวิว", review, app.with_levels(review), "")
+
+    # ค้นตรงตามสเปก/ชื่อรุ่น (เสริม vector search ทั้งสองโหมด)
+    check("exact", "gpu_terms รับ 'rtx4060' ติดกัน", ["rtx 4060"], app.gpu_terms("rtx4060 งบ 40k"), "")
+    check("exact", "gpu_terms ไม่จับเลขรุ่นอื่น", [], app.gpu_terms("Ryzen 7 7735HS งบ 30000"), "")
+    check("exact", "RTX 5070 ไม่นับ 5070 Ti", False, app.gpu_matches("NVIDIA GeForce RTX 5070 Ti", "rtx 5070"), "")
+    check("exact", "RTX 5070 Ti ตรงตัว", True, app.gpu_matches("NVIDIA GeForce RTX 5070 Ti", "rtx 5070 ti"), "")
+    legion5 = {lp["ชื่อสินค้า"] for lp in laptops if lp["ชื่อสินค้า"].startswith("Lenovo Legion 5 ")}
+    victus16 = {lp["ชื่อสินค้า"] for lp in laptops if lp["ชื่อสินค้า"].startswith("HP Victus 16")}
+    asked = set(app.asked_model_names("เทียบ Legion 5 กับ HP Victus 16 ให้หน่อย"))
+    check("exact", "เอ่ย Legion 5 + Victus 16 -> ได้ครบทุกรุ่น", True, bool(legion5) and (legion5 | victus16) <= asked, "")
+    check("exact", "ไม่ปน Legion 5a / Victus 15", set(), {n for n in asked if "Legion 5a" in n or "Victus 15" in n}, "")
+    check("exact", "รุ่นที่ไม่มีในข้อมูล -> ไม่จับอะไร", [], app.asked_model_names("MacBook Air M4 ดีไหม"), "")
+    rtx4060 = [lp for lp in laptops if "rtx 4060" in lp["spec"]["GPU"].lower() and lp["ราคา"] <= 40_000]
+    notes, _ = app.exact_match("RTX 4060 มีรุ่นไหนบ้าง งบไม่เกิน 40,000", budget=40_000)
+    check("exact", "บอกจำนวนรุ่น RTX 4060 ในงบตรงกับข้อมูล", True,
+          bool(notes) and f"มีทั้งหมด {len(rtx4060)} รุ่น" in notes[0], notes[0][:80] if notes else "")
+    check("exact", "คำถามทั่วไป -> ไม่ยุ่ง", ([], []), app.exact_match("โน้ตบุ๊คเล่นเกม งบ 25,000", budget=25_000), "")
+
+    # เงื่อนไขตัวเลข (hybrid retrieval): แรม / จัดอันดับคะแนน / ถูกสุดในกลุ่ม / รุ่นที่เกินงบ
+    H = "hybrid"
+    cpu = lambda lp: lp["benchmark"]["CPU Score"]
+    notes = lambda docs: " ".join(d for d in docs if d.startswith(app.EXACT_NOTE))
+    check(H, "แรม 24 = 24GB พอดี", (24, False), app.ram_condition("แรม 24 มีตัวไหนบ้าง"), "")
+    check(H, "แรม 32GB ขึ้นไป = ตั้งแต่ 32", (32, True), app.ram_condition("แรม 32GB ขึ้นไปมีรุ่นไหนบ้าง"), "")
+    check(H, "16GB แรม (ตัวเลขนำหน้า)", (16, False), app.ram_condition("อยากได้ 16GB แรม"), "")
+    check(H, "SSD 512GB ไม่ใช่แรม", None, app.ram_condition("SSD 512GB งบ 30,000"), "")
+    check(H, "\"RTX 4060 รุ่นไหน\" ไม่ใช่ขอ 4060 รุ่น", None, app.wanted_model_count("RTX 4060 รุ่นไหนคุ้มสุด"), "")
+    ram24 = [lp for lp in laptops if app._ram_gb(lp["spec"]["RAM"]) == 24]
+    docs, _ = app.exact_match("แรม 24 มีตัวไหนบ้าง")
+    check(H, "แรม 24 นับครบทุกรุ่น", True, f"มีทั้งหมด {len(ram24)} รุ่น" in notes(docs), notes(docs)[:80])
+    docs, _ = app.exact_match("เรียงจากราคามากไปน้อยให้หน่อยตัว ram 24")
+    priciest24 = max(ram24, key=lambda lp: lp["ราคา"])["ชื่อสินค้า"]
+    check(H, "เรียงแพงไปถูก: รุ่นแพงสุดขึ้นก่อน", True, f"(เรียงราคาจากแพงไปถูก): {priciest24} " in notes(docs), "")
+    top = max(laptops, key=cpu)["ชื่อสินค้า"]
+    docs, _ = app.exact_match("รุ่นไหนคะแนน CPU สูงที่สุด")
+    check(H, "CPU สูงสุดของทั้งร้านเป็นอันดับ 1", True, f"1. {top} " in notes(docs), "")
+    top30 = max((lp for lp in laptops if lp["ราคา"] <= 30_000), key=cpu)["ชื่อสินค้า"]
+    docs, _ = app.exact_match("งบ 30,000 รุ่นไหน CPU แรงที่สุด", budget=30_000)
+    check(H, "CPU แรงสุดในงบเป็นอันดับ 1", True, f"1. {top30} " in notes(docs), "")
+    rtx = min((lp for lp in laptops if "rtx" in lp["spec"]["GPU"].lower()), key=lambda lp: lp["ราคา"])
+    q = "รุ่นที่มีการ์ดจอ RTX ที่ถูกที่สุดคือรุ่นไหน"
+    docs, _ = app.exact_match(q)
+    check(H, "RTX ที่ถูกที่สุด = ถูกสุดในกลุ่ม", True, f"คือ {rtx['ชื่อสินค้า']} " in notes(docs), "")
+    check(H, "ถูกสุดในกลุ่ม -> ไม่ยัดรุ่นถูกสุดทั้งร้าน", None, app._extreme_spec_doc(q, None), "")
+    docs, _ = app.exact_match("เทียบ Legion 5 กับ HP Victus 16 งบ 45000", budget=45_000)
+    check(H, "Legion 5 เกินงบ -> บอกว่ามีแต่เกินงบ", True,
+          "Legion 5" in notes(docs) and "ห้ามตอบว่าไม่มีในข้อมูล" in notes(docs), "")
+
+    names = {t for t in app.TOOLS}
+    guide = all(n in app.PI_TOOL_GUIDE for n in names)
+    check("tools", "PI_TOOL_GUIDE เอ่ยถึง tool ครบ", True, guide, "ชื่อ tool ต้องตรงกับ pi-agent/server.mjs")
+
+
+# ─────────────────────────────────────────────────────────────
+# 7. สตรีมความคืบหน้าของ Pi Agent (/chat/stream + /chat/commit)
+# ─────────────────────────────────────────────────────────────
+def _ndjson(*events):
+    """จำลองบรรทัดที่ requests.iter_lines() อ่านได้จาก pi-agent /chat/stream"""
+    return [json.dumps(e, ensure_ascii=False).encode() for e in events]
+
+
+def _screen_text(events):
+    """ข้อความที่หน้าเว็บจะโชว์หลังได้ event ชุดนี้ (delta = ต่อท้าย, replace = แทนทั้งก้อน)"""
+    text = ""
+    for ev in events:
+        if ev["type"] == "delta":
+            text += ev["text"]
+        elif ev["type"] == "replace":
+            text = ev["text"]
+    return text
+
+
+def test_stream():
+    S = "stream"
+    check(S, "tool_status: filter + งบ", "กำลังกรองสเปก: RTX 4060 · ไม่เกิน 40,000 บาท…",
+          app.tool_status("filter_laptops", {"gpu": "RTX 4060", "max_price": 40000}), "")
+    check(S, "tool_status: ช่วงราคา + RAM", "กำลังกรองสเปก: RAM 16GB ขึ้นไป · 30,000–40,000 บาท…",
+          app.tool_status("filter_laptops", {"min_ram_gb": 16, "min_price": "30,000", "max_price": 40000.0}), "")
+    check(S, "tool_status: search มีคำค้น", "กำลังค้นสเปกและรีวิว: “แบตอึด”…",
+          app.tool_status("search_laptops", {"query": "แบตอึด"}), "")
+    check(S, "tool_status: ไม่มี argument", "กำลังดูรายละเอียดรุ่น…", app.tool_status("get_laptop_details", None), "")
+    check(S, "tool_status: ราคาไม่ใช่ตัวเลขไม่พัง", "กำลังกรองสเปก…",
+          app.tool_status("filter_laptops", {"max_price": "ถูก ๆ"}), "")
+    check(S, "tool_status: ตัดข้อความยาว", True,
+          len(app.tool_status("search_laptops", {"query": "ก" * 300})) < 110, "")
+
+    check(S, "visible_answer: กั๊กแท็กเปิดที่มาไม่ครบ", "คำตอบ", app.visible_answer("คำตอบ <thi"), "")
+    check(S, "visible_answer: ซ่อนส่วนที่ยังคิดไม่จบ", "ก่อน", app.visible_answer("ก่อน<think>กำลังคิด"), "")
+    check(S, "visible_answer: < ท้ายข้อความถูกกั๊กไว้ก่อน", "ราคา", app.visible_answer("ราคา <"),
+          "ไม่เสียหาย: คำตอบสุดท้ายที่โชว์มาจาก event done ไม่ได้มาจากตรงนี้")
+
+    # รอบแรก AI พูดก่อนเรียก tool -> ข้อความนั้นต้องถูกล้าง แล้วรอบสองมี <think> ถูกหั่นกลางแท็ก
+    events = list(app.relay_pi_events(_ndjson(
+        {"type": "message_start"},
+        {"type": "text", "delta": "ขอค้นเพิ่ม"},
+        {"type": "tool_start", "id": "t1", "name": "filter_laptops", "args": {"gpu": "RTX 4060"}},
+        {"type": "tool_end", "id": "t1", "name": "filter_laptops", "ok": True, "ms": 120},
+        {"type": "message_start"},
+        {"type": "text", "delta": "<thi"},
+        {"type": "text", "delta": "nk>ลองคิดดู</think>"},
+        {"type": "text", "delta": "มี **2 รุ่น**"},
+        {"type": "text", "delta": " ครับ"},
+        {"type": "done", "message": "<think>ลองคิดดู</think>มี **2 รุ่น** ครับ",
+         "tools": [{"name": "filter_laptops", "ok": True, "ms": 120}]},
+    )))
+    statuses = [e["text"] for e in events if e["type"] == "status"]
+    check(S, "relay: สถานะตอนเรียก tool", ["กำลังกรองสเปก: RTX 4060…", app.STATUS_WRITING], statuses, "")
+    check(S, "relay: ล้างข้อความรอบก่อนเรียก tool", True,
+          {"type": "replace", "text": ""} in events, "")
+    check(S, "relay: จอสุดท้ายตรงกับคำตอบ", "มี **2 รุ่น** ครับ", _screen_text(events), "")
+    check(S, "relay: ไม่มี <think> หลุดขึ้นจอ", False,
+          any("think" in e.get("text", "") or "<" in e.get("text", "") for e in events), "")
+    check(S, "relay: event สุดท้ายคือ done ที่ strip_think แล้ว",
+          ("done", "มี **2 รุ่น** ครับ", 1), (events[-1]["type"], events[-1]["message"], len(events[-1]["tools"])), "")
+
+    # tool สองตัวทำงานพร้อมกัน: ตัวแรกเสร็จ สถานะต้องยังเป็นของตัวที่ยังไม่เสร็จ
+    events = list(app.relay_pi_events(_ndjson(
+        {"type": "tool_start", "id": "a", "name": "filter_laptops", "args": {}},
+        {"type": "tool_start", "id": "b", "name": "search_laptops", "args": {"query": "เบา"}},
+        {"type": "tool_end", "id": "b", "ok": True},
+        {"type": "done", "message": ""},
+    )))
+    check(S, "relay: tool ซ้อนกัน", "กำลังกรองสเปก…", events[2]["text"], "")
+    check(S, "relay: คำตอบว่าง -> EMPTY_ANSWER", app.EMPTY_ANSWER, events[-1]["message"], "")
+
+    for name, lines, word in (
+        ("relay: pi-agent แจ้ง error", _ndjson({"type": "error", "status": 502, "error": "โมเดลล่ม"}), "โมเดลล่ม"),
+        ("relay: สายขาดก่อน done", _ndjson({"type": "text", "delta": "ครึ่ง"}), "ก่อนตอบเสร็จ"),
+    ):
+        try:
+            list(app.relay_pi_events(lines, "X"))
+            check(S, name, "LLMError", "ไม่ raise", "")
+        except app.LLMError as e:
+            check(S, name, True, word in str(e), str(e))
+
+    # commit token: ผู้ใช้แก้คำตอบที่จะเข้า context ของ LLM ไม่ได้
+    token = app.commit_token("ถาม", "ตอบ")
+    check(S, "commit token อ่านกลับได้", ("ถาม", "ตอบ"), app.read_commit_token(token), "")
+    check(S, "commit token ถูกแก้ -> None", None, app.read_commit_token(token[:-2] + "xx"), "")
+    check(S, "commit token มั่ว -> None", None, app.read_commit_token("hello"), "")
+
+    client = app.app.test_client()
+    r = client.post("/chat/commit", json={"token": token})
+    r = client.post("/chat/commit", json={"token": token})   # ยิงซ้ำต้องไม่บันทึกซ้ำ
+    with client.session_transaction() as sess:
+        history = sess.get("history")
+    check(S, "/chat/commit บันทึกประวัติครั้งเดียว",
+          [{"role": "user", "content": "ถาม"}, {"role": "assistant", "content": "ตอบ"}], history, "")
+    r = client.post("/chat/commit", json={"token": "x" + token})
+    check(S, "/chat/commit token ปลอม -> 400", 400, r.status_code, "")
+    r = client.post("/chat/stream", json={"message": "  "})
+    check(S, "/chat/stream ข้อความว่าง -> JSON 400", (400, "application/json"),
+          (r.status_code, r.content_type), "error ก่อนเริ่มสตรีมต้องเหมือน /chat")
+
+
+# ─────────────────────────────────────────────────────────────
+# 8. โหมด debug (DEBUG_PANEL) — แผงกระบวนการคิดใต้คำตอบ
+# ─────────────────────────────────────────────────────────────
+def test_debug():
+    D = "debug"
+    saved = app.DEBUG_PANEL
+    client = app.app.test_client()
+    try:
+        # ผู้ดูแลปิดไว้ = ไม่สนค่า debug ที่หน้าเว็บส่งมา (กันคนนอกขอดู prompt ทั้งก้อน)
+        for on, body, want in ((False, {"debug": True}, False), (True, {"debug": True}, True),
+                               (True, {"debug": "yes"}, False), (True, {}, False)):
+            app.DEBUG_PANEL = on
+            with app.app.test_request_context("/chat", method="POST",
+                                              json={"message": "เล่นเกม งบ 25000", **body}):
+                job, err = app._chat_request()
+            if err:
+                check(D, "_chat_request ใช้ได้", True, False, "ไม่มี AI ที่ใช้ได้ในเครื่องนี้")
+                break
+            check(D, f"DEBUG_PANEL={on} ส่ง {body} -> debug={want}", want, job["debug"], "")
+            check(D, f"new_trace ตาม debug={want}", want, app.new_trace(job) is not None, "")
+            if want:
+                trace = app.new_trace(job)
+                check(D, "ตีความงบจากข้อความนี้", (25000, "message"),
+                      (trace["query"]["budget"], trace["query"]["budget_from"]), "")
+        for on in (False, True):
+            app.DEBUG_PANEL = on
+            check(D, f"/providers บอกสถานะ debug={on}", on, client.get("/providers").get_json().get("debug"), "")
+    finally:
+        app.DEBUG_PANEL = saved
+
+    # ความคิดของโมเดลมาได้ทั้งฟิลด์ reasoning และบล็อก <think> (รวมบล็อกที่ token หมดก่อนปิด)
+    info = app.llm_trace({"choices": [{"message": {"content": "<think>คิดก่อน</think>ตอบ<think>ค้าง",
+                                                   "reasoning": "ขั้นแรก"}, "finish_reason": "stop"}],
+                          "usage": {"total_tokens": 10}}, "<think>คิดก่อน</think>ตอบ<think>ค้าง", 1.2346)
+    check(D, "llm_trace เก็บความคิดครบ 3 ส่วน", "ขั้นแรก\n\nคิดก่อน\n\nค้าง", info["thinking"], "")
+    check(D, "llm_trace เวลา/โทเคน/เหตุที่จบ", (1235, 10, "stop"),
+          (info["ms"], info["usage"]["total_tokens"], info["finish_reason"]), "")
+    no_think = app.llm_trace({"choices": [{"message": {"content": "ตอบเลย"}}]}, "ตอบเลย", 0.5)
+    check(D, "llm_trace ไม่มีความคิด = ว่าง", "", no_think["thinking"], "")
+
+    spec = "Acer Nitro V 15 ANV15-51-56QE ราคา 30,990 บาท | ซีพียู (CPU): i5"
+    review = "รีวิวจากผู้ใช้รุ่น Acer Nitro V 15 ANV15-51-56QE ราคา 30,990 บาท (คะแนน...): ดี"
+    check(D, "doc_kind / doc_name เอกสารสเปก", ("spec", "Acer Nitro V 15 ANV15-51-56QE"),
+          (app.doc_kind(spec), app.doc_name(spec)), "")
+    check(D, "doc_kind / doc_name เอกสารรีวิว", ("review", "Acer Nitro V 15 ANV15-51-56QE"),
+          (app.doc_kind(review), app.doc_name(review)), "")
+    check(D, "doc_kind ผลค้นตรง", "note", app.doc_kind("ผลค้นตรงตามสเปก (นับจากข้อมูลทั้งหมด): ..."), "")
+
+    # ค้นจริง (ต้องมี Chroma + โมเดล embed = รันใน container) — เครื่อง host ข้ามส่วนนี้
+    if not app.CHROMA_DIR.exists() or getattr(sys.modules["chromadb"], "IS_STUB", False):
+        return
+    app._spec_doc_by_name = None   # test_tools ตั้งเป็น {} ไว้ (กรณีไม่มี Chroma)
+    q = "RTX 4060 งบไม่เกิน 40,000"
+    trace = {}
+    ctx, over = app.retrieve(q, budget=40_000, trace=trace)
+    plain, plain_over = app.retrieve(q, budget=40_000)
+    check(D, "เปิด debug แล้วผลค้นต้องเหมือนเดิมทุกตัว", (plain, plain_over), (ctx, over), "")
+    check(D, "embed: bge-m3 1024 มิติ + ตัวอย่าง 8 ค่า", (app.EMBED_MODEL, 1024, 8),
+          (trace["embed"]["model"], trace["embed"]["dims"], len(trace["embed"]["preview"])), "")
+    hits = [h for s in trace["searches"] for h in s["hits"]]
+    check(D, "ผลค้นทุกตัวอยู่ในงบ", True, bool(hits) and all(h["price"] <= 40_000 for h in hits), "")
+    check(D, "ความใกล้เคียงเรียงจากมากไปน้อยในแต่ละรอบ", True,
+          all([h["similarity"] for h in s["hits"]] == sorted((h["similarity"] for h in s["hits"]), reverse=True)
+              for s in trace["searches"]), "")
+    check(D, "ความใกล้เคียงอยู่ในช่วง 0-1", True, all(0 <= h["similarity"] <= 1 for h in hits), "")
+    check(D, "รายการเอกสารใน trace = ที่ส่งให้ AI จริง", len(ctx), len(trace["context"]), "")
+    sources = {c["source"] for c in trace["context"]}
+    check(D, "ที่มาของเอกสารเป็นชื่อที่หน้าเว็บรู้จัก", True,
+          sources <= {"vector", "exact", "near_price", "extreme", "summary"}, str(sources))
+    check(D, "RTX 4060 -> มีเอกสารจากการค้นตรง + บันทึกการปรับผลค้น", (True, True),
+          ("exact" in sources, any("RTX 4060" in a for a in trace["adjust"])), "")
+
+
+# ─────────────────────────────────────────────────────────────
+# 9. RAG รุ่น 2 (rag_v2.py) — ตีความเป็นเงื่อนไข -> กรอง/เรียงจากข้อมูลจริง (ส่วนที่ไม่ต้องเรียก LLM)
+# ─────────────────────────────────────────────────────────────
+def test_rag_v2():
+    try:
+        import rag_v2 as v2
+    except ImportError:
+        return   # โค้ดรุ่นที่ยังไม่มี rag_v2
+    R = "rag_v2"
+    plan = lambda **kw: v2.normalize({"intent": kw.pop("intent", "list"), "filters": kw.pop("filters", {}), **kw})
+
+    p = v2.normalize({"intent": "บ้า", "filters": {"ram_gb": 23, "price_max": 15, "gpu_family": "xyz"},
+                      "sort": {"by": "speed"}, "limit": 999})
+    check(R, "normalize: ค่าผิดรูปแบบทิ้งเป็น null", ("recommend", None, None, None, None, None),
+          (p["intent"], p["filters"]["ram_gb"], p["filters"]["price_max"], p["filters"]["gpu_family"], p["sort"], p["limit"]), "")
+    check(R, "อ่าน JSON ที่มีข้อความปน", {"intent": "list"}, v2._parse_json('ok ```json\n{"intent": "list"}\n```'), "")
+    check(R, "ขนาดจอรับได้ทั้งตัวเลขและข้อความ", [16.0, 15.6, 16.0, None],
+          [v2.normalize({"filters": {"screen": s}})["filters"]["screen"] for s in (16, "15.6", "16 นิ้ว", "165Hz")], "")
+    for q, want in (("จอ 16 นิ้ว งบไม่เกิน 30,000", 16.0), ("จอ 15.6 มีรุ่นไหน", 15.6),
+                    ("จอ 165Hz งบ 40000", None), ("แรม 16GB งบ 16000", None)):
+        p = v2.normalize({})
+        v2._safety_net(p, q)
+        check(R, f"ตัวเติมจากข้อความ: ขนาดจอ «{q}»", want, p["filters"]["screen"], "")
+
+    laptops = app.get_laptops()
+    ram = lambda lp: app._ram_gb(lp["spec"]["RAM"])
+    got = v2.select(plan(filters={"ram_gb": 24}), "แรม 24")["items"]
+    check(R, "แรม 24 = ครบทุกรุ่น แรม 24 พอดี", (sum(ram(lp) == 24 for lp in laptops), True),
+          (len(got), all(x["ram_gb"] == 24 for x in got)), "")
+    screen = lambda lp: float(re.match(r"([\d.]+)", lp["spec"]["DISPLAY"]).group(1))
+    got = v2.select(plan(filters={"screen": 16, "price_max": 30000}), "")["items"]
+    check(R, "จอ 16 นิ้ว งบ 30,000 = ครบและไม่มีจอ 15.6 ปน",
+          sum(int(screen(lp)) == 16 and lp["ราคา"] <= 30_000 for lp in laptops),
+          len(got) if all(int(x["screen"]) == 16 for x in got) else -1, "")
+    check(R, "จอ 15.6 = ขนาดนั้นพอดี / จอ 15 = 15.1-15.6", (True, True),
+          (all(x["screen"] == 15.6 for x in v2.select(plan(filters={"screen": 15.6}), "")["items"]),
+           [v2.screen_ok(x, 15) for x in (15.1, 15.3, 15.6, 16.0, 14.0)] == [True, True, True, False, False]), "")
+    got = v2.select(plan(intent="list", filters={"ram_gb": 24}, sort={"by": "price", "order": "desc"}), "")["items"]
+    check(R, "เรียงแพงไปถูก", True, [x["price"] for x in got] == sorted((x["price"] for x in got), reverse=True), "")
+    top30 = max((lp for lp in laptops if lp["ราคา"] <= 30_000), key=lambda lp: lp["benchmark"]["CPU Score"])
+    got = v2.select(plan(intent="rank", filters={"price_max": 30000}, sort={"by": "cpu_score", "order": "desc"}), "")["items"]
+    check(R, "CPU แรงสุดในงบ = อันดับ 1", top30["ชื่อสินค้า"], got[0]["name"], "")
+    got = v2.select(plan(filters={"ram_gb": 24, "price_target": 24000}), "")["items"]
+    check(R, "ราคาประมาณ 24,000 = ช่วง ±15%", True,
+          bool(got) and all(20_400 <= x["price"] <= 27_600 and x["ram_gb"] == 24 for x in got), str([x["price"] for x in got]))
+    got = v2.select(plan(filters={"price_max": 10000}), "")
+    check(R, "งบต่ำกว่ารุ่นถูกสุด -> เสนอรุ่นราคาใกล้ + หมายเหตุ", ("nearest", True),
+          (got["source"], any("ไม่มีรุ่น" in n for n in got["notes"])), "")
+    got = v2.select(plan(intent="compare", models=["Legion 5", "HP Victus 16"], filters={"price_max": 45000}), "")
+    check(R, "เทียบรุ่นที่เกินงบ -> บอกว่ามีแต่เกินงบ", True,
+          any("Legion 5" in x["name"] for x in got["items"]) and any("นอกงบ" in n for n in got["notes"]), "")
+    found, missing = v2.resolve_models(["HP Victus 16", "MacBook Air"])
+    check(R, "หาชื่อรุ่นจากชื่อย่อ / ชื่อที่ไม่มี", (True, ["MacBook Air"]),
+          (bool(found) and all(x["name"].startswith("HP Victus 16") for x in found), missing), "")
+    lookup = v2.select(plan(intent="lookup", models=["Acer Nitro V 15 ANV15-51-56QE", "HP Victus 16-r0356TX"],
+                            sort={"by": "price", "order": "asc"}, limit=1), "")["items"]
+    check(R, "ตัวที่ถูกกว่า = รุ่นแรกหลังเรียงราคา", ["Acer Nitro V 15 ANV15-51-56QE"], [x["name"] for x in lookup], "")
+    check(R, "นอกเรื่อง = ข้อความสำเร็จรูป ไม่เรียก LLM", True,
+          v2.respond(plan(intent="offtopic"), "วันนี้ฝนจะตกไหม", [], {}).startswith("เรื่องนี้ผมตอบไม่ได้"), "")
+    check(R, "ยี่ห้อที่ไม่มี = บอกชื่อยี่ห้อนั้น", True,
+          "MacBook" in v2.respond(plan(intent="not_in_store"), "MacBook Air M3 ราคาเท่าไหร่", [], {}), "")
+    p = plan(intent="recommend", usage="เล่นเกม", filters={"screen": 16, "price_max": 30000})
+    check(R, "ตัดการใช้งานที่ลูกค้าไม่ได้พูด", ("เล่นเกม", None),
+          (v2._ground_usage(p, "จอ 16 นิ้ว งบไม่เกิน 30,000 มีรุ่นไหนบ้าง", [], None), p["usage"]), "")
+    p = plan(intent="recommend", usage="ตัดต่อวิดีโอ")
+    check(R, "เก็บการใช้งานที่ลูกค้าพูดไว้ก่อนหน้า", (None, "ตัดต่อวิดีโอ"),
+          (v2._ground_usage(p, "มีรุ่นไหนอีกบ้าง", [{"role": "user", "content": "ตัดต่อวิดีโอ งบ 40000"}], None),
+           p["usage"]), "")
+    for q, filters, usage, want in (
+            ("ขอรุ่นที่ใช้ Core i7 งบไม่เกิน 35k", {"cpu": "Core i7", "price_max": 35000}, None, "list"),
+            ("งบ 25000 มีรุ่นไหนบ้าง", {"price_max": 25000}, None, "list"),
+            ("RTX 4060 งบ 40000 แนะนำหน่อย", {"gpu": "RTX 4060", "price_max": 40000}, None, "recommend"),
+            ("เล่นเกม งบ 25000", {"price_max": 25000}, "เล่นเกม", "recommend"),
+            ("งบ 20000", {"price_max": 20000}, None, "recommend")):
+        p = plan(intent="recommend", filters=filters, usage=usage)
+        v2.check_plan(p, q, [], None)
+        check(R, f"แนะนำ หรือ ขอรายชื่อ «{q}»", want, p["intent"], "")
+    mem = v2.memory(plan(filters={"ram_gb": 24}))
+    check(R, "จำเงื่อนไขเฉพาะที่มีค่า (cookie เล็ก)", {"ram_gb": 24}, mem["filters"], "")
+
+
 if __name__ == "__main__":
     test_budget()
     test_strip_think()
     test_documents()
     test_data()
+    test_providers()
+    test_tools()
+    test_stream()
+    test_debug()
+    test_rag_v2()
 
     print(f"\n{'='*78}\nUNIT TESTS: ผ่าน {len(PASS)} / {len(PASS)+len(FAIL)}\n{'='*78}")
     if FAIL:

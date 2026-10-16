@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tech Buddy — ผู้ช่วยเลือกโน้ตบุ๊ค</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<!-- Sarabun ถูกประกาศใน CSS มาตลอดแต่ไม่เคยโหลดจริง ภาษาไทยจึงออกมาเป็นฟอนต์สำรองต่างกันไปทุกเครื่อง -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/static/css/style.css?v={{ static_v('css/style.css') }}"><!-- ?v= กันเบราว์เซอร์ใช้ไฟล์เก่าที่แคชไว้ (ดู static_version ใน app.py) -->
 <script>
   // ตั้งธีมก่อนวาดหน้า กัน "แฟลชขาว" ตอนโหลดในโหมดมืด
   (function () {
@@ -40,7 +44,7 @@
   </button>
 
   <div class="history-section">
-    <p class="history-label">ประวัติการสนทนา</p>
+    <h2 class="history-label">ประวัติการสนทนา</h2>
     <div id="historyList" class="history-list"></div>
     <p class="history-empty" id="historyEmpty">ยังไม่มีบทสนทนา</p>
   </div>
@@ -53,16 +57,38 @@
     <span id="clearAllLabel">ล้างประวัติทั้งหมด</span>
   </button>
 
+  <!-- เดิมเป็นจุดเขียว "RAG พร้อมใช้งาน" ที่เขียนตายตัว ไม่ได้เช็คสถานะจริง — บอกแค่ข้อเท็จจริงของข้อมูล -->
   <div class="sidebar-foot">
-    <span class="rag-dot"></span>
-    <span>RAG พร้อมใช้งาน · 99 รุ่น</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <ellipse cx="12" cy="5" rx="8" ry="3"/>
+      <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/>
+    </svg>
+    <span>ข้อมูลโน้ตบุ๊ค 99 รุ่น</span>
   </div>
 </aside>
 
 <!-- ───────────── MAIN ───────────── -->
 <main class="chat-area">
+  <!-- หัวข้อหลักของหน้า (h1 เดิมอยู่ในการ์ดเริ่มต้น ซึ่งหายไปหลังส่งข้อความแรก) -->
+  <h1 class="sr-only">Tech Buddy — ผู้ช่วยเลือกโน้ตบุ๊ค</h1>
   <header class="topbar">
-    <button class="icon-btn" id="themeToggle" title="สลับโหมดสว่าง / มืด" aria-label="สลับโหมดสว่างและโหมดมืด">
+    <!-- เลือก AI ที่จะตอบ + โหมด (รายการมาจาก /providers ซึ่งอ่าน providers.json) -->
+    <div class="ai-picker" id="aiPicker" hidden>
+      <label class="ai-select-wrap" title="เลือก AI ที่จะตอบ">
+        <span class="ai-select-label">AI</span>
+        <select id="aiSelect" aria-label="เลือก AI ที่จะตอบ"></select>
+        <svg class="ai-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </label>
+      <button class="engine-toggle" id="engineToggle" type="button" role="switch" aria-checked="true">
+        <span class="engine-track" aria-hidden="true"><span class="engine-knob"></span></span>
+        <span class="engine-text"></span><!-- main.js ใส่ชื่อโหมดเอง (ปิดโหมดได้ด้วย ALLOWED_ENGINES) -->
+      </button>
+    </div>
+
+    <!-- main.js ตั้ง aria-pressed ตามธีม ชื่อปุ่มจึงเป็น "สถานะ" (กดอยู่ = โหมดมืด) ไม่ใช่คำสั่ง -->
+    <button class="icon-btn" id="themeToggle" title="สลับโหมดสว่าง / มืด" aria-label="โหมดมืด">
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round">
         <circle cx="12" cy="12" r="4"/>
@@ -85,7 +111,7 @@
           <path d="M9.5 10h9a2.5 2.5 0 012.5 2.5V17a2.5 2.5 0 01-2.5 2.5H14l-3.5 2.5v-2.5H9.5A2.5 2.5 0 017 17v-4.5A2.5 2.5 0 019.5 10z"/>
         </svg>
       </div>
-      <h1 class="empty-title">เริ่มต้นการสนทนา</h1>
+      <h2 class="empty-title">เริ่มต้นการสนทนา</h2>
       <p class="empty-sub">บอกงบประมาณและการใช้งาน แล้ว Tech Buddy จะช่วยเลือกโน้ตบุ๊คให้ แบบตรงไปตรงมา ไม่เชียร์ขาย</p>
       <div class="chips" id="chips">
         <button class="chip">โน้ตบุ๊คเล่นเกม งบ 25,000</button>
@@ -102,8 +128,9 @@
 
   <div class="composer">
     <div class="input-bar">
+      <label class="sr-only" for="userInput">ข้อความถึง Tech Buddy</label>
       <input id="userInput" type="text" autocomplete="off" maxlength="1000"
-             placeholder="พิมพ์ข้อความของคุณ..." />
+             placeholder="เช่น เล่นเกม งบ 25,000" />
       <button class="send-btn" id="sendBtn" title="ส่งข้อความ" aria-label="ส่งข้อความ">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round">
@@ -115,6 +142,25 @@
   </div>
 </main>
 
-<script src="/static/js/main.js"></script>
+<!-- ───────────── แผง DEBUG (ด้านขวา) ─────────────
+     เปิดจากปุ่ม "กระบวนการคิด" ใต้คำตอบ (มีเฉพาะตอนผู้ดูแลตั้ง DEBUG_PANEL=true ใน .env)
+     จอกว้าง: เป็นคอลัมน์ข้างแชท / จอแคบ: เลื่อนทับจากด้านขวา — เนื้อหาใส่โดย main.js -->
+<aside class="debug-drawer" id="debugDrawer" aria-labelledby="debugTitle" hidden>
+  <header class="debug-head">
+    <div class="debug-head-text">
+      <h2 class="debug-title" id="debugTitle">กระบวนการคิดของ AI</h2>
+      <p class="debug-question" id="debugQuestion"></p>
+      <p class="debug-totals" id="debugTotals"></p>
+    </div>
+    <button class="icon-btn debug-close" id="debugClose" type="button" aria-label="ปิดแผงกระบวนการคิด" title="ปิด">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </header>
+  <div class="debug-body" id="debugBody"></div>
+</aside>
+
+<script src="/static/js/main.js?v={{ static_v('js/main.js') }}"></script>
 </body>
 </html>
