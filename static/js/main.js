@@ -312,7 +312,20 @@ let shownEntry = null;             // คำตอบที่แผงโชว
 const SOURCE_NAME = {
   vector: 'ค้นเวกเตอร์', exact: 'ตรงชื่อรุ่น/สเปก', near_price: 'ราคาใกล้งบ',
   extreme: 'ถูก/แพงสุด', summary: 'ภาพรวมร้าน',
+  // RAG รุ่น 2
+  filter: 'กรองตามเงื่อนไข', named: 'รุ่นที่ลูกค้าเอ่ยถึง', nearest: 'ราคาใกล้ที่สุด',
 };
+const INTENT_NAME = {
+  recommend: 'ขอคำแนะนำ', list: 'ขอรายชื่อรุ่น', rank: 'จัดอันดับ', lookup: 'ถามสเปกรุ่น', compare: 'เทียบรุ่น',
+  overview: 'ภาพรวมร้าน', not_in_store: 'ยี่ห้อ/รุ่นที่ไม่มีในร้าน', general: 'ความรู้ทั่วไป',
+  greeting: 'ทักทาย', offtopic: 'นอกเรื่อง',
+};
+const FILTER_NAME = {
+  price_max: 'ราคาไม่เกิน', price_min: 'ราคาตั้งแต่', price_target: 'ราคาประมาณ', ram_gb: 'แรม (GB)',
+  ram_min: 'แรมขั้นต่ำ (GB)', gpu: 'การ์ดจอ', gpu_family: 'กลุ่มการ์ดจอ', cpu: 'CPU', brand: 'ยี่ห้อ',
+  series: 'ซีรีส์', screen: 'จอ (นิ้ว)',
+};
+const SORT_NAME = { price: 'ราคา', cpu_score: 'คะแนน CPU', gpu_score: 'คะแนน GPU', ram: 'แรม' };
 const KIND_NAME = { spec: 'สเปก', review: 'รีวิว', summary: 'ภาพรวม', note: 'ผลค้นตรง' };
 const FINISH_NAME = { stop: 'ตอบจบปกติ', length: 'โทเคนหมดก่อนตอบจบ' };
 
@@ -345,7 +358,24 @@ function debugStepsHtml(t) {
   const budgetFrom = { message: 'อ่านจากข้อความนี้', session: 'จำไว้จากข้อความก่อนหน้า' }[q.budget_from];
   const steps = [];
 
-  steps.push(['ตีความคำถาม', `<dl class="dbg-kv">
+  if (t.understand) {
+    // RAG รุ่น 2: AI แปลงคำถาม (+ ประวัติแชท) เป็นเงื่อนไข JSON แล้วโค้ดกรองจากข้อมูลจริง
+    const u = t.understand, p = u.plan || {};
+    const filters = Object.entries(p.filters || {}).filter(([, v]) => v != null)
+      .map(([k, v]) => `${FILTER_NAME[k] || k} ${typeof v === 'number' && v >= 1000 ? fmtNum(v) : v}`);
+    const sort = p.sort ? `${SORT_NAME[p.sort.by] || p.sort.by} ${p.sort.order === 'desc' ? 'มากไปน้อย' : 'น้อยไปมาก'}` : '–';
+    steps.push(['AI แปลงคำถามเป็นเงื่อนไข', `<dl class="dbg-kv">
+      ${debugRow('ประเภทคำถาม', escapeHtml(INTENT_NAME[p.intent] || p.intent || '–'))}
+      ${debugRow('เงื่อนไข', filters.length ? escapeHtml(filters.join(' · ')) : 'ไม่มี')}
+      ${debugRow('เรียงตาม', escapeHtml(sort))}
+      ${debugRow('จำนวนที่ขอ', p.limit ? `${p.limit} รุ่น` : '–')}
+      ${debugRow('การใช้งาน', escapeHtml(p.usage || '–'))}
+      ${debugRow('รุ่นที่เอ่ยถึง', list(p.models))}
+      ${debugRow('ตัวอ่านตัวเลขเติมให้', list(u.added))}
+      ${debugRow('เวลา', `${fmtNum(u.ms)} ms`)}
+    </dl>${u.error ? `<p class="dbg-dim">${escapeHtml(u.error)}</p>` : ''}
+    <details><summary>JSON ที่ AI ตอบ</summary><pre class="dbg-pre">${escapeHtml(u.raw || '')}</pre></details>`]);
+  } else steps.push(['ตีความคำถาม', `<dl class="dbg-kv">
     ${debugRow('งบ (เพดาน)', q.budget != null
       ? `${fmtNum(q.budget)} บาท${budgetFrom ? ` <span class="dbg-dim">· ${budgetFrom}</span>` : ''}` : 'ไม่ได้บอก')}
     ${debugRow('ราคาขั้นต่ำ', q.min_price != null ? `${fmtNum(q.min_price)} บาท` : '–')}

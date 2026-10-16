@@ -20,6 +20,7 @@ import chromadb                                          # vector database
 from dotenv import load_dotenv
 
 import llm_providers as llm
+import rag_v2  # RAG รุ่น 2 (ตีความคำถาม -> กรองจากข้อมูลจริง -> ตอบ)
 
 load_dotenv()  # โหลด environment variables จากไฟล์ .env
 
@@ -674,6 +675,12 @@ def asked_model_names(question: str) -> list[str]:
 # แล้วกรอง/เรียงจากข้อมูลจริงทั้ง 99 รุ่นด้วยโค้ด (hybrid retrieval)
 # ปิด (false) = RAG ค้นตามความหมายอย่างเดียว เหลือแค่กฎการ์ดจอ + ชื่อรุ่น — ไว้เทียบผลหรือถ้าลูกค้าเลือกแบบนั้น
 HYBRID_FILTERS = os.getenv("HYBRID_FILTERS", "true").lower() == "true"
+# v2 = ตีความคำถามเป็นเงื่อนไขด้วย LLM แล้วกรอง/เรียงจากข้อมูลจริง (rag_v2.py) / v1 = ค้นตามความหมาย + กฎด้านบน
+RAG_PIPELINE = os.getenv("RAG_PIPELINE", "v2").lower()
+
+
+def use_v2(job: dict) -> bool:
+    return RAG_PIPELINE == "v2" and job["engine"] != llm.ENGINE_PI
 RAM_SIZES = {4, 8, 12, 16, 24, 32, 48, 64, 96, 128}
 MAX_LIST = 15           # รุ่นที่ไล่ชื่อในบรรทัดสรุปผลค้นตรงได้สูงสุด
 _RE_RAM_ASK = re.compile(
@@ -1694,6 +1701,17 @@ def chat():
     started = time.time()
     trace = new_trace(job)
     debug_part = {"debug": trace} if trace is not None else {}
+    if use_v2(job):
+        try:
+            plan = rag_v2.understand(user_msg, history, session.get("last_query"), provider, trace)
+            session["last_query"] = rag_v2.memory(plan)
+            answer = rag_v2.respond(plan, user_msg, history, provider, trace)
+        except LLMError as e:
+            return jsonify({"error": str(e), **debug_part}), 502
+        except Exception as e:
+            return jsonify({"error": f"RAG error: {e}", **debug_part}), 500
+        save_turn(history, user_msg, answer)
+        return jsonify({"message": answer, "meta": chat_meta(job, [], started), **debug_part})
     try:
         context, over_budget = retrieve(user_msg, budget=budget, min_price=min_price, trace=trace)
     except Exception as e:
@@ -1733,13 +1751,38 @@ def chat_stream():
     user_msg, provider, history = job["message"], job["provider"], job["history"]
     budget, min_price = job["budget"], job["min_price"]
 
+    started = time.time()
+    # ขอดูกระบวนการคิด -> แนบไปกับ event สุดท้าย (done หรือ error) ทั้งก้อน
+    trace = new_trace(job)
+    debug_part = {"debug": trace} if trace is not None else {}
+
+    if use_v2(job):
+        # RAG รุ่น 2: ตีความคำถามก่อนเริ่มสตรีม — เงื่อนไขที่ได้ต้องเขียนลง session ซึ่งส่งไปกับ header
+        try:
+            plan = rag_v2.understand(user_msg, history, session.get("last_query"), provider, trace)
+        except LLMError as e:
+            return jsonify({"error": str(e), **debug_part}), 502
+        session["last_query"] = rag_v2.memory(plan)
+
+        def events_v2():
+            yield sse({"type": "status", "text": STATUS_WRITING})
+            try:
+                answer = rag_v2.respond(plan, user_msg, history, provider, trace)
+            except LLMError as e:
+                yield sse({"type": "error", "error": str(e), **debug_part})
+                return
+            except Exception as e:
+                yield sse({"type": "error", "error": f"RAG error: {e}", **debug_part})
+                return
+            yield sse({"type": "done", "message": answer, "meta": chat_meta(job, [], started),
+                       "commit": commit_token(user_msg, answer), **debug_part})
+
+        return Response(events_v2(), mimetype="text/event-stream", headers={
+            "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
     # ทุกอย่างที่ต้องใช้จาก request/session อ่านมาครบแล้ว — generator นี้ทำงานหลังส่ง header
     # จึงไม่แตะ session อีก (เขียนไปก็ไม่ถูกบันทึก)
     def events():
-        started = time.time()
-        # ขอดูกระบวนการคิด -> แนบไปกับ event สุดท้าย (done หรือ error) ทั้งก้อน
-        trace = new_trace(job)
-        debug_part = {"debug": trace} if trace is not None else {}
         yield sse({"type": "status", "text": STATUS_SEARCHING})
         try:
             context, over_budget = retrieve(user_msg, budget=budget, min_price=min_price, trace=trace)
@@ -1880,6 +1923,7 @@ def new_chat():
     session.pop("budget", None)
     # ขอบล่างต้องล้างคู่กับงบเสมอ ไม่งั้นแชทใหม่ที่ไม่บอกงบจะโดนกรองด้วยราคาขั้นต่ำของแชทเก่า
     session.pop("budget_min", None)
+    session.pop("last_query", None)   # เงื่อนไขที่ RAG รุ่น 2 จำไว้ใช้กับคำถามถัดไป
     return jsonify({"ok": True})
 
 

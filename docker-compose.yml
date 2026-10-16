@@ -33,6 +33,7 @@ services:
     # /app/.cache/huggingface ที่สร้างไว้ตอน build (host ไม่มี 2 อันนี้) -> แอปพัง + โหลดโมเดล 2GB ใหม่
     volumes:
       - ./app.py:/app/app.py
+      - ./rag_v2.py:/app/rag_v2.py
       - ./llm_providers.py:/app/llm_providers.py
       - ./providers.json:/app/providers.json
       - ./templates:/app/templates

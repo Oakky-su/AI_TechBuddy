@@ -10,7 +10,11 @@
 
 ## ความสามารถหลัก
 
-- **RAG แยกโควตาเอกสาร** — ค้นเอกสารสเปก 6 ชิ้น + รีวิว 3 ชิ้น แยกกัน (ปรับได้ใน `.env`) แล้วแนบภาพรวมร้านทุกครั้ง
+- **RAG v2: AI แปลงคำถามเป็นเงื่อนไขก่อนค้น (self-query)** — ขั้นแรก AI อ่านคำถาม + บทสนทนาก่อนหน้า
+  แล้วตอบเป็น JSON ว่าลูกค้าถามอะไร (ขอรายชื่อ / จัดอันดับ / แนะนำ / เทียบรุ่น / ถามสเปก / นอกเรื่อง) และเงื่อนไข
+  (งบ แรม การ์ดจอ CPU ยี่ห้อ ขนาดจอ เรียงตาม) จากนั้นโค้ดคัดจากข้อมูลจริงครบทั้ง 99 รุ่น แล้วจึงให้ AI เรียบเรียงคำตอบ
+  — นับครบ ไม่หลุดรุ่น จำเงื่อนไขข้ามข้อความได้ ดูขั้นตอนคิดได้ที่ปุ่ม "กระบวนการคิด" ใต้คำตอบ (`rag_v2.py`)
+- **RAG v1 (สลับกลับได้ที่ `RAG_PIPELINE=v1`)** — ค้นเอกสารสเปก 6 ชิ้น + รีวิว 3 ชิ้น แยกกัน (ปรับได้ใน `.env`) แล้วแนบภาพรวมร้านทุกครั้ง
   เพื่อการันตีว่า AI เห็นราคาและสเปกเสมอ (ฐานข้อมูลมีรีวิวมากกว่าสเปก 3 เท่า ถ้าค้นรวมจะได้แต่รีวิว)
 - **กฎกรองตัวเลข (hybrid retrieval)** — การค้นตามความหมายแยก "แรม 16" กับ "แรม 24" ไม่ออก
   และเห็นแค่ไม่กี่รุ่น โค้ดจึงอ่านเงื่อนไขจากคำถาม (การ์ดจอ แรม จัดอันดับคะแนน CPU/GPU ถูก/แพงสุดในกลุ่ม
@@ -68,9 +72,10 @@
 
 | ทางเลือก | ตั้งใน `.env` |
 |---|---|
-| RAG ค้นตามความหมายอย่างเดียว | `HYBRID_FILTERS=false` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
-| RAG ดึงสเปกเยอะขึ้น ไม่ดึงรีวิว | `HYBRID_FILTERS=false` `TOP_K_SPEC=15` `TOP_K_REVIEW=0` |
-| RAG + กฎกรองตัวเลข (ค่าเริ่มต้น) | `HYBRID_FILTERS=true` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
+| **RAG v2: AI แปลงคำถามเป็นเงื่อนไข แล้วคัดจากข้อมูลจริง (ค่าเริ่มต้น)** | `RAG_PIPELINE=v2` |
+| RAG ค้นตามความหมายอย่างเดียว | `RAG_PIPELINE=v1` `HYBRID_FILTERS=false` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
+| RAG ดึงสเปกเยอะขึ้น ไม่ดึงรีวิว | `RAG_PIPELINE=v1` `HYBRID_FILTERS=false` `TOP_K_SPEC=15` `TOP_K_REVIEW=0` |
+| RAG + กฎกรองตัวเลข | `RAG_PIPELINE=v1` `HYBRID_FILTERS=true` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
 | Agentic RAG (AI เรียกเครื่องมือค้นเพิ่มเอง) | `ALLOWED_ENGINES=` ว่าง + `DEFAULT_ENGINE=pi` |
 
 ผลทดสอบของแต่ละทางเลือกอยู่ในเอกสาร "ข้อจำกัดของ RAG" — วัดซ้ำได้ด้วย `tests/test_question_types.py`
@@ -158,7 +163,8 @@ embed ด้วย bge-m3 (เวลา + ตัวอย่างเวกเ�
 ## โครงสร้าง
 
 ```
-app.py              สมองทั้งหมด — route, ค้นหา, prompt, เรียก LLM
+app.py              route ของเว็บ + RAG v1 (ค้น vector, prompt, เรียก LLM)
+rag_v2.py           RAG v2 — AI แปลงคำถามเป็นเงื่อนไข -> คัดจากข้อมูลจริง -> AI เรียบเรียงคำตอบ
 build_index.py      แปลง laptops.json เป็น vector index (397 เอกสาร)
 laptops.json        ข้อมูลสินค้า 99 รุ่น
 templates/          หน้าเว็บ
@@ -180,7 +186,8 @@ PYTHONIOENCODING=utf-8 python tests/test_unit.py          # ไม่ต้อ�
 PYTHONIOENCODING=utf-8 python tests/test_api.py           # ต้องมีแอปรันอยู่
 PYTHONIOENCODING=utf-8 python tests/test_hallucination.py # เช็คว่า AI แต่งตัวเลขไหม
 
-# ถามจริง 25 หมวด (ถูก/แพงสุด การ์ดจอ แรม คะแนน CPU/GPU งบ เทียบรุ่น นอกเรื่อง ...) แล้วตรวจกับ laptops.json
+# ถามจริง 42 เคส 9 หมวด (ภาพรวม ถูก/แพงสุด กรองสเปก จัดอันดับ ถามสเปก แนะนำ เทียบรุ่น ถามต่อหลายข้อความ ปฏิเสธ)
+# แล้วตรวจกับ laptops.json — รวมข้อความจริงที่ผู้ใช้เคยเจอตอบผิด / QT_ONLY=คำ เลือกรันบางเคส
 # ต้องมีแอปรันอยู่ / QT_ENGINE=classic|pi เลือกโหมด / QT_OUT=ไฟล์ บันทึกคำตอบเต็ม
 PYTHONIOENCODING=utf-8 python tests/test_question_types.py http://localhost:5000
 
@@ -198,6 +205,7 @@ docker exec ai_teddy-teddy-1 python /app/test_retrieval.py
 | `DEFAULT_PROVIDER` | `ollama-gemma4` | AI เริ่มต้น (id ใน `providers.json`) |
 | `VISIBLE_PROVIDERS` | ว่าง (ทุกตัว) | id ที่เปิดให้เลือกบนเว็บ คั่นด้วยจุลภาค ตัวอื่นซ่อนจากเมนูและเรียกผ่าน `/chat` ไม่ได้ (รัน `tests/compare_models.py` กับตัวที่ซ่อน ต้องเอาออกจากค่านี้ก่อน) |
 | `OLLAMA_API_KEY` | — | key ของ Ollama Cloud (ollama.com/settings) สำหรับ `ollama-gemma4` |
+| `RAG_PIPELINE` | `v2` | `v2` = AI แปลงคำถามเป็นเงื่อนไขแล้วคัดจากข้อมูลจริง (`rag_v2.py`) / `v1` = RAG แบบเดิม (3 ค่าด้านล่างใช้กับ v1 เท่านั้น) |
 | `HYBRID_FILTERS` | `true` | `true` = เปิดกฎกรองตัวเลข (แรม จัดอันดับคะแนน ถูก/แพงสุดในกลุ่ม รุ่นที่เกินงบ ไล่รายชื่อครบ) / `false` = RAG ค้นตามความหมายอย่างเดียว |
 | `TOP_K_SPEC` | `6` | จำนวนเอกสารสเปกที่ค้นมาให้ AI ต่อคำถาม |
 | `TOP_K_REVIEW` | `3` | จำนวนเอกสารรีวิวต่อคำถาม (`0` = ไม่ดึงรีวิว) |
