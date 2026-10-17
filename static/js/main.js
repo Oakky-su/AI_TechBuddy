@@ -14,8 +14,6 @@ const clearAllBtn  = document.getElementById('clearAllBtn');
 const clearAllLabel = document.getElementById('clearAllLabel');
 const aiPicker     = document.getElementById('aiPicker');
 const aiSelect     = document.getElementById('aiSelect');
-const engineToggle = document.getElementById('engineToggle');
-const engineText   = engineToggle.querySelector('.engine-text');
 
 const STORE_KEY = 'tb-chats';
 const AI_KEY = 'tb-ai';
@@ -23,22 +21,10 @@ let chats = [];        // [{ id, title, messages: [{role, content, meta?}] }]
 let currentId = null;
 let isLoading = false;
 
-/* AI ที่เลือก — provider = id ใน providers.json, engine = 'pi' (Pi Agent) | 'classic' (RAG)
+/* AI ที่เลือก — provider = id ใน providers.json
    ถ้าโหลดรายการไม่ได้ จะส่ง null ไปให้เซิร์ฟเวอร์ใช้ค่าเริ่มต้นเอง */
 let providers = [];
-let aiChoice = { provider: null, engine: null };
-
-// ชื่อโหมดชุดเดียว ใช้ทั้งปุ่มสลับ, tooltip และบรรทัด meta ใต้คำตอบ
-// ชื่อโหมดที่ผู้ใช้เห็น (id 'pi' / 'classic' คือค่าที่ส่งให้เซิร์ฟเวอร์ ห้ามเปลี่ยน)
-// ใช้คำธรรมดาแทน "Pi Agent / RAG" เพราะคนซื้อโน้ตบุ๊คไม่รู้จักศัพท์พวกนั้น
-const ENGINE_NAME = { pi: 'ค้นละเอียด', classic: 'ค้นเร็ว' };
-// โหมดที่เซิร์ฟเวอร์เปิดให้ใช้ (ALLOWED_ENGINES) — เหลือโหมดเดียวเมื่อไหร่ หน้าเว็บจะไม่พูดถึงโหมดเลย
-let serverEngines = ['pi', 'classic'];
-const TOOL_NAME = {
-  filter_laptops: 'กรองสเปก',
-  search_laptops: 'ค้นสเปก/รีวิว',
-  get_laptop_details: 'ดูรายละเอียดรุ่น',
-};
+let aiChoice = { provider: null };
 
 /* ───────────── ธีมสว่าง / มืด ───────────── */
 // aria-pressed = โหมดมืดเปิดอยู่ไหม (ธีมเริ่มต้นถูกตั้งด้วยสคริปต์ใน <head> ก่อนไฟล์นี้)
@@ -101,14 +87,9 @@ const BOT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
   stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/>
   <path d="M2 20h20"/></svg>`;
 
-/* "Gemma 4 31B (Ollama) · ค้นละเอียด · ค้นเพิ่ม 2 ครั้ง · 3.4 วิ" — บอกว่าคำตอบนี้มาจาก AI ตัวไหน โหมดไหน */
+/* "Gemma 4 31B (Ollama) · 3.4 วิ" — บอกว่าคำตอบนี้มาจาก AI ตัวไหน ใช้เวลาเท่าไหร่ */
 function metaText(meta) {
-  const showMode = serverEngines.length > 1;   // โหมดเดียว = ไม่ต้องบอกชื่อโหมด
-  const parts = [meta.provider_label, showMode ? ENGINE_NAME[meta.engine] || meta.engine : null];
-  if (showMode && meta.engine === 'pi') {
-    const tools = meta.tools || [];
-    parts.push(tools.length ? `ค้นเพิ่ม ${tools.length} ครั้ง` : 'ตอบจากข้อมูลที่ค้นไว้');
-  }
+  const parts = [meta.provider_label];
   if (meta.elapsed != null) parts.push(`${meta.elapsed} วิ`);
   return parts.filter(Boolean).join(' · ');
 }
@@ -147,8 +128,6 @@ function buildMsg(role, content, isError = false, meta = null) {
     const line = document.createElement('p');
     line.className = 'bubble-meta';
     line.textContent = metaText(meta);
-    const tools = (meta.tools || []).map(t => TOOL_NAME[t] || t);
-    if (tools.length) line.title = `เครื่องมือที่ใช้: ${tools.join(', ')}`;
     bubble.appendChild(line);
   }
 
@@ -257,7 +236,6 @@ function createLiveReply() {
    ข้อความที่เซิร์ฟเวอร์เขียนเป็นภาษาไทยถึงผู้ใช้อยู่แล้ว (ถามถี่เกิน, AI ที่ยังไม่ตั้งค่า ...) ใช้ตามเดิม */
 const FRIENDLY_ERRORS = [
   [/ใช้เวลาเกิน|timed? ?out/i, 'AI ใช้เวลานานเกินไป ลองอีกครั้ง หรือถามให้สั้นลงนะครับ'],
-  [/pi-agent/i, `โหมด${ENGINE_NAME.pi}ไม่พร้อมใช้งานตอนนี้ ลองอีกครั้ง หรือสลับไปโหมด${ENGINE_NAME.classic}ที่ปุ่มด้านบน`],
   [/^Vector search error/, 'ระบบค้นข้อมูลสินค้าขัดข้องชั่วคราว ลองอีกครั้งในอีกสักครู่นะครับ'],
   [/error/i, 'AI ตอบไม่สำเร็จ ลองอีกครั้ง หรือเปลี่ยนไปใช้ AI ตัวอื่นจากเมนูด้านบน'],
 ];
@@ -426,10 +404,6 @@ function debugStepsHtml(t) {
       ${debugRow('โทเคน (prompt + คำตอบ)', tokens)}
       ${debugRow('จบเพราะ', escapeHtml(FINISH_NAME[ai.finish_reason] || ai.finish_reason || '–'))}
     </dl>${thinking}`]);
-  } else if (t.engine === 'pi') {
-    const tools = (t.tools || []).map(x => TOOL_NAME[x.name] || x.name);
-    steps.push(['AI โหมดค้นละเอียด', `<p class="dbg-dim">prompt และเวลาของ AI อยู่ฝั่ง Pi Agent ดูได้แค่เครื่องมือที่เรียกเพิ่ม</p>
-      <p>${tools.length ? escapeHtml(tools.join(', ')) : 'ไม่ได้เรียกเครื่องมือเพิ่ม'}</p>`]);
   }
 
   const totals = [
@@ -730,8 +704,6 @@ function setLoading(on) {
   sendBtn.setAttribute('aria-label', sendBtn.title);
   sendBtn.classList.toggle('is-stop', on);
   aiSelect.disabled = on;
-  if (on) engineToggle.disabled = true;
-  else syncEngineToggle();   // คืนสถานะเดิม (และซ่อนปุ่มต่อถ้าเหลือโหมดเดียว)
 }
 
 /* ───────────── ส่งข้อความ ───────────── */
@@ -757,10 +729,10 @@ async function sendMessage(text) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        message: msg, provider: aiChoice.provider, engine: aiChoice.engine,
+        message: msg, provider: aiChoice.provider,
         ...(debugOn && { debug: true }),
       }),
-      signal: request.signal,   // กดหยุด -> ตัดสาย -> เซิร์ฟเวอร์สั่ง agent หยุดต่อเอง
+      signal: request.signal,   // กดหยุด -> ตัดสาย -> เซิร์ฟเวอร์หยุดรอ AI ต่อเอง
     });
     if (!(res.headers.get('content-type') || '').startsWith('text/event-stream')) {
       // error ที่รู้ก่อนเริ่มตอบ (ถามถี่เกิน, ข้อความยาวเกิน ...) มาเป็น JSON แบบเดียวกับ /chat
@@ -831,24 +803,6 @@ function saveAiChoice() {
 
 const currentProvider = () => providers.find(p => p.id === aiChoice.provider);
 
-function syncEngineToggle() {
-  const p = currentProvider();
-  // โหมดที่ใช้ได้กับ AI ตัวนี้ (เซิร์ฟเวอร์ตัดโหมดที่ผู้ดูแลปิดออกให้แล้ว)
-  const engines = (p?.engines || serverEngines).filter(e => ENGINE_NAME[e]);
-  if (engines.length && !engines.includes(aiChoice.engine)) aiChoice.engine = engines[0];
-
-  // เหลือโหมดเดียว -> ซ่อนปุ่มไปเลย ลูกค้าจะไม่รู้ว่ามีอีกโหมด
-  // (ของเดิมโชว์ปุ่มแบบกดไม่ได้ ซึ่งทำให้สงสัยว่าอีกโหมดคืออะไร)
-  engineToggle.hidden = engines.length < 2;
-  const on = aiChoice.engine === 'pi';
-  engineToggle.setAttribute('aria-checked', String(on));
-  engineToggle.disabled = false;
-  engineText.textContent = ENGINE_NAME[on ? 'pi' : 'classic'];
-  engineToggle.title = on
-    ? `${ENGINE_NAME.pi}: ค้นข้อมูลเพิ่มเองหลายรอบก่อนตอบ ครบกว่าแต่ใช้เวลานานกว่า (กดเพื่อสลับเป็น${ENGINE_NAME.classic})`
-    : `${ENGINE_NAME.classic}: ค้นรอบเดียวแล้วตอบทันที (กดเพื่อสลับเป็น${ENGINE_NAME.pi})`;
-}
-
 function renderAiPicker() {
   aiSelect.innerHTML = '';
   // แสดงเฉพาะ AI ที่ใช้ได้จริง — ตัวที่ยังไม่ตั้ง API key เคยโชว์เป็นสีเทาพร้อมข้อความ ".env"
@@ -857,7 +811,6 @@ function renderAiPicker() {
     aiSelect.add(new Option(p.label, p.id));
   }
   aiSelect.value = aiChoice.provider ?? '';
-  syncEngineToggle();
   aiPicker.hidden = false;
 }
 
@@ -866,27 +819,18 @@ async function initAiPicker() {
     const res = await fetch('/providers');
     const data = await res.json();
     providers = data.providers || [];
-    if (Array.isArray(data.engines) && data.engines.length) serverEngines = data.engines;
     debugOn = data.debug === true;   // ผู้ดูแลเปิด DEBUG_PANEL -> ทุกคำตอบมีปุ่ม "กระบวนการคิด"
     if (!providers.length) return;
 
     const saved = loadAiChoice();
     const usable = id => providers.some(p => p.id === id && p.available);
     aiChoice.provider = usable(saved.provider) ? saved.provider : data.default_provider;
-    aiChoice.engine = ENGINE_NAME[saved.engine] ? saved.engine : data.default_engine;
     renderAiPicker();
   } catch { /* ซ่อนเมนูไว้ เซิร์ฟเวอร์จะใช้ AI เริ่มต้นเอง */ }
 }
 
 aiSelect.addEventListener('change', () => {
   aiChoice.provider = aiSelect.value;
-  syncEngineToggle();
-  saveAiChoice();
-});
-
-engineToggle.addEventListener('click', () => {
-  aiChoice.engine = aiChoice.engine === 'pi' ? 'classic' : 'pi';
-  syncEngineToggle();
   saveAiChoice();
 });
 

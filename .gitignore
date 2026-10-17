@@ -8,6 +8,4 @@ tests/last_run.json
 # เอกสารภายใน เก็บไว้ในเครื่องเท่านั้น ไม่ขึ้น GitHub
 docs/
 
-# pi-agent (Node)
-node_modules/
 tests/compare_*.json

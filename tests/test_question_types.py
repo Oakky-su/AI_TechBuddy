@@ -8,7 +8,6 @@
 
 ตัวเลือก (env):
     QT_GAP=3.5      วินาทีที่เว้นก่อนแต่ละข้อความ (เว็บสาธารณะจำกัด 20 ข้อความ/นาที — เครื่องทดสอบตั้ง 0 ได้)
-    QT_ENGINE=pi|classic   เลือกโหมดตอบ (ไม่ตั้ง = ค่าเริ่มต้นของเซิร์ฟเวอร์)
     QT_ONLY=แท็ก,แท็ก  รันเฉพาะเคสที่ระบุ (ไว้ไล่แก้ทีละข้อ)
     QT_OUT=<ไฟล์>    บันทึกคำตอบเต็ม + ผลตรวจเป็น JSON
 
@@ -31,7 +30,6 @@ sys.stdout.reconfigure(encoding="utf-8")
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 URL = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:5000").rstrip("/")
 GAP = float(os.getenv("QT_GAP", "3.5"))
-ENGINE = os.getenv("QT_ENGINE", "").strip()
 ONLY = {t.strip() for t in os.getenv("QT_ONLY", "").split(",") if t.strip()}
 LAPTOPS = json.load(open(os.getenv("LAPTOPS_PATH") or os.path.join(BASE, "laptops.json"), encoding="utf-8"))
 
@@ -313,7 +311,7 @@ CASES = [
 
 def ask(s: requests.Session, q: str) -> dict:
     time.sleep(GAP)
-    r = s.post(f"{URL}/chat", json={"message": q, **({"engine": ENGINE} if ENGINE else {})}, timeout=180)
+    r = s.post(f"{URL}/chat", json={"message": q}, timeout=180)
     data = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
     return {"status": r.status_code, "answer": data.get("message") or "", "error": data.get("error"),
             "meta": data.get("meta") or {}}
@@ -351,7 +349,7 @@ def main():
         meta = res["meta"]
         q = msgs if isinstance(msgs, str) else " → ".join(msgs)
         results.append({"group": group, "tag": tag, "question": q, "ok": ok, "note": note,
-                        "answer": res["answer"], "elapsed": meta.get("elapsed"), "engine": meta.get("engine")})
+                        "answer": res["answer"], "elapsed": meta.get("elapsed")})
         print(f"{'✅' if ok else '❌'} [{group} · {tag}] {q}\n     {note} · {meta.get('elapsed')} วิ", flush=True)
 
     passed = sum(r["ok"] for r in results)

@@ -296,13 +296,9 @@ def group_c():
 
     # หน้าเว็บใช้ /chat/stream: ต้องได้สถานะ + ข้อความทยอยมา + done แล้ว commit ให้ session จำประวัติ
     q = "RTX 4060 มีรุ่นไหนบ้าง งบไม่เกิน 40,000"
-    # โหมด pi ทยอยส่งข้อความ (delta) / โหมด classic (RAG) ส่งคำตอบทีเดียวใน done
-    # ผู้ดูแลปิดโหมดได้ด้วย ALLOWED_ENGINES — ทดสอบตามโหมดที่เซิร์ฟเวอร์เปิดจริง
-    engines = requests.get(f"{URL}/providers", timeout=30).json().get("engines", ["pi", "classic"])
-    engine = "pi" if "pi" in engines else "classic"
     t0 = time.time()
     events, first_text = [], None
-    with s.post(f"{URL}/chat/stream", json={"message": q, "engine": engine}, stream=True, timeout=180) as r:
+    with s.post(f"{URL}/chat/stream", json={"message": q}, stream=True, timeout=180) as r:
         for line in r.iter_lines(decode_unicode=True):
             if line.startswith("data: "):
                 events.append(json.loads(line[6:]))
@@ -314,12 +310,12 @@ def group_c():
     committed = done and s.post(f"{URL}/chat/commit", json={"token": done.get("commit")}, timeout=30).ok
     cookie = len(s.cookies.get("session", ""))
     ok = (r.headers.get("Content-Type", "").startswith("text/event-stream") and "status" in kinds
-          and (engine == "classic" or "delta" in kinds) and done.get("message") and committed and cookie > after)
+          and done.get("message") and committed and cookie > after)
     record(20, "/chat/stream ทยอยส่ง + commit ประวัติ", q,
-           f"status{' + delta' if engine == 'pi' else ''} ก่อน done, commit แล้ว cookie มีประวัติ (โหมด {engine})",
+           "status ก่อน done, commit แล้ว cookie มีประวัติ",
            "PASS" if ok else "FAIL",
            f"{len(events)} events ({', '.join(sorted(set(kinds)))}), ข้อความแรกที่ {first_text or 0:.1f}s "
-           f"จากทั้งหมด {dt:.1f}s, tools={done.get('meta', {}).get('tools')}, commit={committed}, "
+           f"จากทั้งหมด {dt:.1f}s, commit={committed}, "
            f"cookie {after} -> {cookie} bytes", done.get("message", ""))
 
 

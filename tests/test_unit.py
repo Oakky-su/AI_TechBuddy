@@ -1,6 +1,6 @@
 # ชุดทดสอบ logic ล้วน (ไม่ต้องใช้โมเดล/API) — รัน: python tests/test_unit.py
 # ครอบคลุม: extract_budget(), strip_think(), laptops_to_documents(), ความสมบูรณ์ของ laptops.json,
-#          รายการ AI (llm_providers) และ tool ของ Pi Agent ที่ไม่ต้องใช้ vector DB
+#          รายการ AI (llm_providers) และตัวช่วยค้นของ RAG ที่ไม่ต้องใช้ vector DB
 import json
 import re
 import sys
@@ -173,9 +173,7 @@ def test_data():
 # ─────────────────────────────────────────────────────────────
 # 5. llm_providers — รายการ AI ที่สลับได้จากหน้าเว็บ
 # ─────────────────────────────────────────────────────────────
-KEY_VARS = ("THAILLM_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-            "GEMINI_API_KEY", "OLLAMA_BASE_URL", "DEFAULT_PROVIDER", "DEFAULT_ENGINE",
-            "VISIBLE_PROVIDERS", "OLLAMA_API_KEY", "ALLOWED_ENGINES")
+KEY_VARS = ("THAILLM_API_KEY", "OLLAMA_API_KEY", "OLLAMA_BASE_URL", "DEFAULT_PROVIDER", "VISIBLE_PROVIDERS")
 
 
 def test_providers():
@@ -184,58 +182,36 @@ def test_providers():
         by_id = {p["id"]: p for p in llm.load_providers()}
         check("providers", "Ollama ไม่มี key = ใช้ไม่ได้", False, by_id["ollama-gemma4"]["available"], "")
         check("providers", "ThaiLLM ไม่มี key = ใช้ไม่ได้", False, by_id["thaillm"]["available"], "")
-        check("providers", "Claude ไม่มี key = ใช้ไม่ได้", False, by_id["claude-sonnet"]["available"], "")
-        check("providers", "pi-builtin ใช้ได้เฉพาะโหมด pi", ["pi"], by_id["claude-sonnet"]["engines"], "")
-        check("providers", "openai-compatible ใช้ได้ทั้ง 2 โหมด", ["pi", "classic"],
-              by_id["ollama-gemma4"]["engines"], "")
-        os.environ["OLLAMA_API_KEY"] = "test-ollama-key"
+        check("providers", "ทุกตัวเป็น endpoint แบบ OpenAI (ไม่มีโหมด agent)", True,
+              all(p.get("kind") == llm.KIND_OPENAI for p in by_id.values()), "")
+        os.environ["OLLAMA_API_KEY"] = "sk-test-secret"
         check("providers", "ไม่ตั้ง DEFAULT_PROVIDER -> ตัวแรกที่ใช้ได้", "ollama-gemma4",
               llm.public_list()["default_provider"], "")
 
-        _, _, err = llm.pick("thaillm", "classic")
+        _, err = llm.pick("thaillm")
         check("providers", "เลือกตัวที่ยังไม่มี key -> error", True, bool(err) and "THAILLM_API_KEY" in err, "")
-        _, _, err = llm.pick("no-such-ai", "pi")
+        _, err = llm.pick("no-such-ai")
         check("providers", "id ที่ไม่มี -> error", True, bool(err), "")
-
-        os.environ["ANTHROPIC_API_KEY"] = "sk-test-secret"
-        _, _, err = llm.pick("claude-sonnet", "classic")
-        check("providers", "pi-builtin + classic -> error", True, bool(err) and "Pi Agent" in err, "")
-        provider, engine, err = llm.pick("claude-sonnet", "pi")
-        check("providers", "pi-builtin + pi -> ผ่าน", (None, "pi"), (err, engine), "")
+        provider, err = llm.pick("ollama-gemma4")
+        check("providers", "เลือกตัวที่ตั้ง key แล้ว -> ผ่าน", (None, "ollama-gemma4"),
+              (err, provider and provider["id"]), "")
         check("providers", "/providers ไม่มี API key หลุด", False,
               "sk-test-secret" in json.dumps(llm.public_list()), "สำคัญ: รายการนี้ส่งถึงเบราว์เซอร์")
-        check("providers", "config ที่ส่ง pi-agent มี key", "sk-test-secret",
-              llm.agent_config(provider).get("api_key"), "")
 
         os.environ["OLLAMA_BASE_URL"] = "http://example.test/v1/"
         ollama = next(p for p in llm.load_providers() if p["id"] == "ollama-gemma4")
         check("providers", "env ทับ base_url + ตัด / ท้าย", "http://example.test/v1", ollama["base_url"], "")
 
+        os.environ["THAILLM_API_KEY"] = "test-thaillm-key"
         os.environ["VISIBLE_PROVIDERS"] = "ollama-gemma4"
         listed = [p["id"] for p in llm.public_list()["providers"]]
         check("providers", "VISIBLE_PROVIDERS ซ่อนตัวอื่นจากเมนู", ["ollama-gemma4"], listed, "")
-        _, _, err = llm.pick("claude-sonnet", "pi")
+        _, err = llm.pick("thaillm")
         check("providers", "ตัวที่ซ่อนเรียกผ่าน /chat ไม่ได้", True, bool(err) and "ไม่ได้เปิดให้ใช้" in err, "")
         os.environ.pop("VISIBLE_PROVIDERS")
 
-        os.environ["ALLOWED_ENGINES"] = "classic"
-        lst = llm.public_list()
-        ollama = next(p for p in lst["providers"] if p["id"] == "ollama-gemma4")
-        check("engines", "ALLOWED_ENGINES=classic -> เหลือโหมดเดียว", (["classic"], ["classic"], "classic"),
-              (lst["engines"], ollama["engines"], lst["default_engine"]), "")
-        _, engine, err = llm.pick("ollama-gemma4", "pi")
-        check("engines", "ขอ pi ตอนปิดไว้ -> ใช้ classic แทนเงียบ ๆ", ("classic", None), (engine, err), "")
-        os.environ["ANTHROPIC_API_KEY"] = "sk-test"
-        claude = next(p for p in llm.load_providers() if p["id"] == "claude-sonnet")
-        check("engines", "AI ที่ใช้ได้แค่ pi -> ใช้ไม่ได้ตอนปิด pi", False, claude["available"], "")
-        os.environ["ALLOWED_ENGINES"] = "nonsense"
-        check("engines", "ค่าแปลก -> เปิดทั้งสองโหมด", ["pi", "classic"], llm.allowed_engines(), "")
-        os.environ.pop("ALLOWED_ENGINES")
-
-        os.environ["DEFAULT_ENGINE"] = "classic"
-        check("providers", "DEFAULT_ENGINE=classic", "classic", llm.default_engine(), "")
-        os.environ["DEFAULT_ENGINE"] = "weird"
-        check("providers", "DEFAULT_ENGINE แปลก -> pi", "pi", llm.default_engine(), "")
+        os.environ["DEFAULT_PROVIDER"] = "thaillm"
+        check("providers", "DEFAULT_PROVIDER เลือกตัวที่ตั้งไว้", "thaillm", llm.public_list()["default_provider"], "")
     finally:
         for k, v in saved.items():
             os.environ.pop(k, None)
@@ -244,41 +220,13 @@ def test_providers():
 
 
 # ─────────────────────────────────────────────────────────────
-# 6. tool ของ Pi Agent ที่ไม่ต้องใช้ vector DB
+# 6. ตัวช่วยค้นของ RAG v1 ที่ไม่ต้องใช้ vector DB
 # ─────────────────────────────────────────────────────────────
-def test_tools():
+def test_helpers():
     laptops = json.loads((BASE / "laptops.json").read_text(encoding="utf-8"))
-    app._spec_doc_by_name = {}   # ไม่มี Chroma บนเครื่อง host -> tool ใช้ชื่อรุ่นแทนเอกสารสเปก
+    app._spec_doc_by_name = {}   # ไม่มี Chroma บนเครื่อง host -> exact_match ใช้ชื่อรุ่นแทนเอกสารสเปก
 
-    check("tools", "_int_arg รับ '25,000'", 25000, app._int_arg({"x": "25,000"}, "x"), "")
-    check("tools", "_int_arg รับ 25000.0", 25000, app._int_arg({"x": 25000.0}, "x"), "")
-    check("tools", "_int_arg ค่าว่าง = None", None, app._int_arg({"x": ""}, "x"), "")
-    check("tools", "_ram_gb('16 GB DDR5')", 16, app._ram_gb("16 GB DDR5 5600 MHz"), "")
-    check("tools", "_limit_arg เพดาน 15", 15, app._limit_arg({"limit": 99}, 8), "")
-
-    # กรอง RTX 4060 งบ 40,000 ต้องได้ "ทุก" รุ่นที่ตรง (vector search ทำแบบนี้ไม่ได้)
-    want = [lp for lp in laptops if "rtx 4060" in lp["spec"]["GPU"].lower() and lp["ราคา"] <= 40000]
-    text = app.tool_filter_laptops({"gpu": "RTX 4060", "max_price": 40000, "limit": 15})
-    if want:
-        check("tools", "filter: นับจำนวนรุ่นถูก", True, text.startswith(f"พบ {len(want)} รุ่น"), text[:60])
-        check("tools", "filter: มีทุกรุ่นที่ตรง", True,
-              all(lp["ชื่อสินค้า"] in text for lp in want[:15]), "")
-    else:
-        check("tools", "filter: ไม่เจอ -> บอกตรง ๆ", True, text.startswith("ไม่พบรุ่น"), text[:60])
-
-    cheapest = min(laptops, key=lambda lp: lp["ราคา"])["ชื่อสินค้า"]
-    text = app.tool_filter_laptops({"sort_by": "price_asc", "limit": 1})
-    check("tools", "filter: เรียงถูกสุดก่อน", True, cheapest in text, "")
-    text = app.tool_filter_laptops({"max_price": 1})
-    check("tools", "filter: ไม่มีรุ่นในงบ", True, text.startswith("ไม่พบรุ่น"), "")
-
-    try:
-        app.tool_get_laptop_details({"name": ""})
-        check("tools", "details: ไม่ใส่ชื่อ -> ValueError", True, False, "")
-    except ValueError:
-        check("tools", "details: ไม่ใส่ชื่อ -> ValueError", True, True, "")
-    text = app.tool_get_laptop_details({"name": "MacBook Air M9"})
-    check("tools", "details: ชื่อที่ไม่มี -> ไม่พบ + เสนอชื่อใกล้เคียง", True, text.startswith("ไม่พบรุ่น"), "")
+    check("helpers", "_ram_gb('16 GB DDR5')", 16, app._ram_gb("16 GB DDR5 5600 MHz"), "")
 
     # ระดับคะแนนต้องตรงเกณฑ์ใน SYSTEM_PROMPT รวมขอบช่วง
     for score, want in ((17_999, "เริ่มต้น"), (18_000, "กลาง"), (25_000, "กลาง-สูง"),
@@ -340,92 +288,17 @@ def test_tools():
     check(H, "Legion 5 เกินงบ -> บอกว่ามีแต่เกินงบ", True,
           "Legion 5" in notes(docs) and "ห้ามตอบว่าไม่มีในข้อมูล" in notes(docs), "")
 
-    names = {t for t in app.TOOLS}
-    guide = all(n in app.PI_TOOL_GUIDE for n in names)
-    check("tools", "PI_TOOL_GUIDE เอ่ยถึง tool ครบ", True, guide, "ชื่อ tool ต้องตรงกับ pi-agent/server.mjs")
 
 
 # ─────────────────────────────────────────────────────────────
-# 7. สตรีมความคืบหน้าของ Pi Agent (/chat/stream + /chat/commit)
+# 7. สตรีมคำตอบ (/chat/stream + /chat/commit)
 # ─────────────────────────────────────────────────────────────
-def _ndjson(*events):
-    """จำลองบรรทัดที่ requests.iter_lines() อ่านได้จาก pi-agent /chat/stream"""
-    return [json.dumps(e, ensure_ascii=False).encode() for e in events]
-
-
-def _screen_text(events):
-    """ข้อความที่หน้าเว็บจะโชว์หลังได้ event ชุดนี้ (delta = ต่อท้าย, replace = แทนทั้งก้อน)"""
-    text = ""
-    for ev in events:
-        if ev["type"] == "delta":
-            text += ev["text"]
-        elif ev["type"] == "replace":
-            text = ev["text"]
-    return text
-
-
 def test_stream():
     S = "stream"
-    check(S, "tool_status: filter + งบ", "กำลังกรองสเปก: RTX 4060 · ไม่เกิน 40,000 บาท…",
-          app.tool_status("filter_laptops", {"gpu": "RTX 4060", "max_price": 40000}), "")
-    check(S, "tool_status: ช่วงราคา + RAM", "กำลังกรองสเปก: RAM 16GB ขึ้นไป · 30,000–40,000 บาท…",
-          app.tool_status("filter_laptops", {"min_ram_gb": 16, "min_price": "30,000", "max_price": 40000.0}), "")
-    check(S, "tool_status: search มีคำค้น", "กำลังค้นสเปกและรีวิว: “แบตอึด”…",
-          app.tool_status("search_laptops", {"query": "แบตอึด"}), "")
-    check(S, "tool_status: ไม่มี argument", "กำลังดูรายละเอียดรุ่น…", app.tool_status("get_laptop_details", None), "")
-    check(S, "tool_status: ราคาไม่ใช่ตัวเลขไม่พัง", "กำลังกรองสเปก…",
-          app.tool_status("filter_laptops", {"max_price": "ถูก ๆ"}), "")
-    check(S, "tool_status: ตัดข้อความยาว", True,
-          len(app.tool_status("search_laptops", {"query": "ก" * 300})) < 110, "")
-
     check(S, "visible_answer: กั๊กแท็กเปิดที่มาไม่ครบ", "คำตอบ", app.visible_answer("คำตอบ <thi"), "")
     check(S, "visible_answer: ซ่อนส่วนที่ยังคิดไม่จบ", "ก่อน", app.visible_answer("ก่อน<think>กำลังคิด"), "")
     check(S, "visible_answer: < ท้ายข้อความถูกกั๊กไว้ก่อน", "ราคา", app.visible_answer("ราคา <"),
           "ไม่เสียหาย: คำตอบสุดท้ายที่โชว์มาจาก event done ไม่ได้มาจากตรงนี้")
-
-    # รอบแรก AI พูดก่อนเรียก tool -> ข้อความนั้นต้องถูกล้าง แล้วรอบสองมี <think> ถูกหั่นกลางแท็ก
-    events = list(app.relay_pi_events(_ndjson(
-        {"type": "message_start"},
-        {"type": "text", "delta": "ขอค้นเพิ่ม"},
-        {"type": "tool_start", "id": "t1", "name": "filter_laptops", "args": {"gpu": "RTX 4060"}},
-        {"type": "tool_end", "id": "t1", "name": "filter_laptops", "ok": True, "ms": 120},
-        {"type": "message_start"},
-        {"type": "text", "delta": "<thi"},
-        {"type": "text", "delta": "nk>ลองคิดดู</think>"},
-        {"type": "text", "delta": "มี **2 รุ่น**"},
-        {"type": "text", "delta": " ครับ"},
-        {"type": "done", "message": "<think>ลองคิดดู</think>มี **2 รุ่น** ครับ",
-         "tools": [{"name": "filter_laptops", "ok": True, "ms": 120}]},
-    )))
-    statuses = [e["text"] for e in events if e["type"] == "status"]
-    check(S, "relay: สถานะตอนเรียก tool", ["กำลังกรองสเปก: RTX 4060…", app.STATUS_WRITING], statuses, "")
-    check(S, "relay: ล้างข้อความรอบก่อนเรียก tool", True,
-          {"type": "replace", "text": ""} in events, "")
-    check(S, "relay: จอสุดท้ายตรงกับคำตอบ", "มี **2 รุ่น** ครับ", _screen_text(events), "")
-    check(S, "relay: ไม่มี <think> หลุดขึ้นจอ", False,
-          any("think" in e.get("text", "") or "<" in e.get("text", "") for e in events), "")
-    check(S, "relay: event สุดท้ายคือ done ที่ strip_think แล้ว",
-          ("done", "มี **2 รุ่น** ครับ", 1), (events[-1]["type"], events[-1]["message"], len(events[-1]["tools"])), "")
-
-    # tool สองตัวทำงานพร้อมกัน: ตัวแรกเสร็จ สถานะต้องยังเป็นของตัวที่ยังไม่เสร็จ
-    events = list(app.relay_pi_events(_ndjson(
-        {"type": "tool_start", "id": "a", "name": "filter_laptops", "args": {}},
-        {"type": "tool_start", "id": "b", "name": "search_laptops", "args": {"query": "เบา"}},
-        {"type": "tool_end", "id": "b", "ok": True},
-        {"type": "done", "message": ""},
-    )))
-    check(S, "relay: tool ซ้อนกัน", "กำลังกรองสเปก…", events[2]["text"], "")
-    check(S, "relay: คำตอบว่าง -> EMPTY_ANSWER", app.EMPTY_ANSWER, events[-1]["message"], "")
-
-    for name, lines, word in (
-        ("relay: pi-agent แจ้ง error", _ndjson({"type": "error", "status": 502, "error": "โมเดลล่ม"}), "โมเดลล่ม"),
-        ("relay: สายขาดก่อน done", _ndjson({"type": "text", "delta": "ครึ่ง"}), "ก่อนตอบเสร็จ"),
-    ):
-        try:
-            list(app.relay_pi_events(lines, "X"))
-            check(S, name, "LLMError", "ไม่ raise", "")
-        except app.LLMError as e:
-            check(S, name, True, word in str(e), str(e))
 
     # commit token: ผู้ใช้แก้คำตอบที่จะเข้า context ของ LLM ไม่ได้
     token = app.commit_token("ถาม", "ตอบ")
@@ -504,7 +377,7 @@ def test_debug():
     # ค้นจริง (ต้องมี Chroma + โมเดล embed = รันใน container) — เครื่อง host ข้ามส่วนนี้
     if not app.CHROMA_DIR.exists() or getattr(sys.modules["chromadb"], "IS_STUB", False):
         return
-    app._spec_doc_by_name = None   # test_tools ตั้งเป็น {} ไว้ (กรณีไม่มี Chroma)
+    app._spec_doc_by_name = None   # test_helpers ตั้งเป็น {} ไว้ (กรณีไม่มี Chroma)
     q = "RTX 4060 งบไม่เกิน 40,000"
     trace = {}
     ctx, over = app.retrieve(q, budget=40_000, trace=trace)
@@ -829,7 +702,7 @@ if __name__ == "__main__":
     test_documents()
     test_data()
     test_providers()
-    test_tools()
+    test_helpers()
     test_stream()
     test_debug()
     test_warmup()

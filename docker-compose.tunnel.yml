@@ -11,7 +11,7 @@
 #   - rate limit ต่อ IP ของจริง    กันคนเดียวยิงจนโควตา LLM หมด (ค่า dev 1000/นาที ใช้กับเทสต์เท่านั้น)
 #   - พอร์ต 5000 ผูกแค่ localhost  ทางเข้าจากข้างนอกมีทางเดียวคือ tunnel (ไม่งั้นคนใน LAN
 #                                   ยิงตรงแล้วปลอม CF-Connecting-IP หลบ rate limit ได้)
-#   - Traefik ไม่ส่ง /internal และ /debug ต่อให้แอปเลย (ชั้นป้องกันซ้อนจาก INTERNAL_TOKEN)
+#   - Traefik ไม่ส่ง /debug ต่อให้แอปเลย (ชั้นป้องกันซ้อนจาก ENABLE_DEBUG)
 
 services:
   teddy:
@@ -20,14 +20,14 @@ services:
     environment:
       - ENABLE_DEBUG=false
       - RATE_LIMIT_PER_MIN=${PUBLIC_RATE_LIMIT_PER_MIN:-20}
-    # default = คุยกับ pi-agent (http://teddy:5000) เหมือนเดิม, edge = ให้ traefik มองเห็น
+    # default = เครือข่ายภายในของ compose, edge = ให้ traefik มองเห็น
     networks: [default, edge]
     labels:
       - traefik.enable=true
       - traefik.docker.network=edge
       - traefik.http.routers.techbuddy.entrypoints=web
       # เปลี่ยนโดเมนได้ด้วย TECHBUDDY_HOST ใน .env (panel อ่านชื่อใน Host(...) ไปสร้าง DNS ให้เอง)
-      - traefik.http.routers.techbuddy.rule=Host(`${TECHBUDDY_HOST:-techbuddy.pemaai.online}`) && !PathPrefix(`/internal`) && !PathPrefix(`/debug`)
+      - traefik.http.routers.techbuddy.rule=Host(`${TECHBUDDY_HOST:-techbuddy.pemaai.online}`) && !PathPrefix(`/debug`)
       - traefik.http.services.techbuddy.loadbalancer.server.port=5000
 
 networks:

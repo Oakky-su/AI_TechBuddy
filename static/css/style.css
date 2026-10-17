@@ -255,7 +255,6 @@ body {
 /* ───────────── เลือก AI + โหมด ───────────── */
 .ai-picker { display: flex; align-items: center; gap: 8px; margin-right: auto; min-width: 0; }
 .ai-picker[hidden] { display: none; }
-.engine-toggle[hidden] { display: none; }   /* ผู้ดูแลเปิดไว้โหมดเดียว (ALLOWED_ENGINES) */
 
 .ai-select-wrap {
   position: relative;
@@ -304,44 +303,6 @@ body {
   pointer-events: none;
 }
 
-.engine-toggle {
-  display: flex; align-items: center; gap: 8px;
-  height: 38px;
-  padding: 0 12px 0 9px;
-  flex-shrink: 0;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--text-soft);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color .15s ease, color .15s ease, background .15s ease;
-}
-.engine-toggle:hover:not(:disabled) { border-color: var(--text-dim); color: var(--text); }
-.engine-toggle:disabled { cursor: not-allowed; opacity: .75; }
-
-.engine-track {
-  position: relative;
-  width: 30px; height: 18px;
-  flex-shrink: 0;
-  border-radius: 99px;
-  background: var(--border);
-  transition: background .15s ease;
-}
-.engine-knob {
-  position: absolute; top: 2px; left: 2px;
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
-  transition: transform .18s ease;
-}
-/* เปิดอยู่ = บอกด้วยรางสีแดงอย่างเดียว ไม่ย้อมทั้งปุ่ม — เดิมทั้งปุ่มแดงจนดังกว่าตัวแชท */
-.engine-toggle[aria-checked="true"] { color: var(--text); }
-.engine-toggle[aria-checked="true"] .engine-track { background: var(--brand); }
-.engine-toggle[aria-checked="true"] .engine-knob { transform: translateX(12px); }
 
 .icon-btn {
   width: 38px; height: 38px;
@@ -453,6 +414,10 @@ body {
   border-color: transparent;
   color: #fff;
 }
+/* สีคลุมข้อความปกติเป็นแดงโปร่งแสง (::selection ด้านบน) ซึ่งกลืนไปกับกล่องคำถามที่เป็นสีแดง
+   ลากคลุมแล้วมองไม่เห็นว่าคลุมอยู่ -> ในกล่องคำถามใช้พื้นขาว ตัวอักษรแดงแทน */
+.user-msg .bubble::selection,
+.user-msg .bubble *::selection { background: rgba(255, 255, 255, .92); color: #b8151b; }
 
 /* เนื้อหา markdown ที่เรนเดอร์จากคำตอบของ AI */
 .bubble p  { margin: 0 0 9px; }
@@ -624,7 +589,7 @@ body {
 /* จอสัมผัส: เป้ากดอย่างน้อย 44px */
 @media (pointer: coarse) {
   .icon-btn, .send-btn { width: 44px; height: 44px; }
-  .ai-select-wrap, .engine-toggle { height: 44px; }
+  .ai-select-wrap { height: 44px; }
   .chip { min-height: 44px; padding: 10px 16px; }
   .new-chat-btn { min-height: 44px; }
 }
@@ -646,7 +611,6 @@ body {
   .ai-picker { gap: 6px; }
   .ai-select-label { display: none; }
   #aiSelect { padding-left: 11px; font-size: 13px; }
-  .engine-toggle { gap: 6px; padding: 0 9px 0 7px; font-size: 12px; }
 }
 
 /* ───────────── เพิ่มโดยงานสตรีมคำตอบ (main.js) ─────────────

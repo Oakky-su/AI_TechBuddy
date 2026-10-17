@@ -1,6 +1,6 @@
 # เทียบ AI หลายตัวด้วยคำถามชุดเดียวกัน — ใช้ตอบคำถาม "ถ้าเปลี่ยนจาก 31B เป็น 8B จะไหวไหม"
 # รัน (ในคอนเทนเนอร์ teddy):
-#   python tests/compare_models.py                      # ทุก AI ที่ใช้ได้ × 2 โหมด
+#   python tests/compare_models.py                      # ทุก AI ที่ใช้ได้
 #   python tests/compare_models.py ollama-gemma4 thaillm      # เลือกเฉพาะ id ใน providers.json
 # ผลละเอียดทุกคำตอบเขียนไว้ที่ tests/compare_models.json
 #
@@ -96,12 +96,12 @@ def bad_prices(ans, budgets):
     return sorted(n for n in cited if n >= 10_000 and n not in PRICES and n not in budgets)
 
 
-def ask(provider, engine, question):
+def ask(provider, question):
     s = requests.Session()
     s.post(f"{URL}/new_chat", timeout=30)
     t = time.time()
     try:
-        r = s.post(f"{URL}/chat", json={"message": question, "provider": provider, "engine": engine},
+        r = s.post(f"{URL}/chat", json={"message": question, "provider": provider},
                    timeout=200)
         data = r.json()
     except Exception as e:  # noqa: BLE001 — เก็บเป็นผลล้มเหลวของข้อนั้น แล้วไปข้อต่อไป
@@ -118,38 +118,34 @@ def main():
 
     results, last = [], 0.0
     for p in chosen:
-        for engine in [e for e in ("pi", "classic") if e in p["engines"]]:
-            for tag, q, check, budgets in QUESTIONS:
-                time.sleep(max(0.0, MIN_GAP - (time.time() - last)))
-                last = time.time()
-                data, sec = ask(p["id"], engine, q)
-                ans = data.get("message") or ""
-                ok, what = check(ans) if ans else (False, "ไม่มีคำตอบ")
-                fake = bad_prices(ans, budgets)
-                row = {
-                    "provider": p["id"], "engine": engine, "tag": tag, "question": q,
-                    "pass": ok and not fake and not data.get("error"), "check": what,
-                    "fake_prices": fake, "sec": round(sec, 1), "error": data.get("error"),
-                    "tools": (data.get("meta") or {}).get("tools", []), "answer": ans,
-                }
-                results.append(row)
-                mark = "PASS" if row["pass"] else "FAIL"
-                extra = f" | ราคาแต่ง={fake}" if fake else ""
-                extra += f" | error={row['error'][:120]}" if row["error"] else ""
-                print(f"[{mark}] {p['id']:<16} {engine:<7} {tag:<12} {row['sec']:>5}s "
-                      f"tools={len(row['tools'])}{extra}", flush=True)
+        for tag, q, check, budgets in QUESTIONS:
+            time.sleep(max(0.0, MIN_GAP - (time.time() - last)))
+            last = time.time()
+            data, sec = ask(p["id"], q)
+            ans = data.get("message") or ""
+            ok, what = check(ans) if ans else (False, "ไม่มีคำตอบ")
+            fake = bad_prices(ans, budgets)
+            row = {
+                "provider": p["id"], "tag": tag, "question": q,
+                "pass": ok and not fake and not data.get("error"), "check": what,
+                "fake_prices": fake, "sec": round(sec, 1), "error": data.get("error"), "answer": ans,
+            }
+            results.append(row)
+            mark = "PASS" if row["pass"] else "FAIL"
+            extra = f" | ราคาแต่ง={fake}" if fake else ""
+            extra += f" | error={row['error'][:120]}" if row["error"] else ""
+            print(f"[{mark}] {p['id']:<16} {tag:<12} {row['sec']:>5}s{extra}", flush=True)
 
     OUT_FILE.write_text(
         json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
 
     print("\nสรุป (ผ่าน / ทั้งหมด, เวลาเฉลี่ย)")
     for p in chosen:
-        for engine in ("pi", "classic"):
-            rows = [r for r in results if r["provider"] == p["id"] and r["engine"] == engine]
-            if rows:
-                passed = sum(r["pass"] for r in rows)
-                avg = sum(r["sec"] for r in rows) / len(rows)
-                print(f"  {p['id']:<16} {engine:<7} {passed}/{len(rows)}  เฉลี่ย {avg:.1f}s")
+        rows = [r for r in results if r["provider"] == p["id"]]
+        if rows:
+            passed = sum(r["pass"] for r in rows)
+            avg = sum(r["sec"] for r in rows) / len(rows)
+            print(f"  {p['id']:<16} {passed}/{len(rows)}  เฉลี่ย {avg:.1f}s")
 
 
 if __name__ == "__main__":

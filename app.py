@@ -1,9 +1,8 @@
 # ไฟล์หลักของแอป Flask — RAG chatbot "TechBuddy" แนะนำโน้ตบุ๊ค
-# สถาปัตยกรรม: laptops.json -> bge-m3 embedding -> Chroma vector search -> LLM แต่งคำตอบ
-# LLM สลับได้จากหน้าเว็บ (providers.json) และเลือกได้ 2 โหมด:
-#   classic : ค้นครั้งเดียวแล้วส่งให้ LLM แต่งคำตอบ (แบบเดิม)
-#   pi      : ส่งต่อให้ pi-agent (pi.dev) ซึ่งเรียก tool ที่ /internal/tools ค้นข้อมูลเพิ่มเองได้หลายรอบ
-import hmac
+# เป็น RAG ธรรมดา: ทุกคำถามทำตามขั้นตอนเดิม เรียก LLM ตามลำดับตายตัว (ไม่มีโหมด agent)
+#   RAG_PIPELINE=v2 (ค่าเริ่มต้น): LLM ตีความคำถาม -> โค้ดคัดรุ่นจาก laptops.json -> LLM แต่งคำตอบ (rag_v2.py)
+#   RAG_PIPELINE=v1: laptops.json -> bge-m3 embedding -> Chroma vector search -> LLM แต่งคำตอบ
+# LLM เลือกได้ใน .env / providers.json
 import json
 import os
 import re
@@ -53,13 +52,6 @@ HISTORY_FOR_LLM = 4          # จำนวนข้อความย้อน�
 # endpoint / โมเดล / API key ของแต่ละเจ้าอยู่ใน providers.json + .env (ดู llm_providers.py)
 # ปิดโหมดคิด (reasoning) ของโมเดลที่คิดใน <think> เช่น ThaiLLM -> เร็ว/ถูกกว่า แต่คุณภาพอาจลด
 DISABLE_THINKING = os.getenv("DISABLE_THINKING", "false").lower() == "true"
-
-# ---- Pi Agent (pi.dev) ----
-# pi-agent เป็น service แยก (โฟลเดอร์ pi-agent/) ที่รัน agent loop ของ pi แล้วเรียก tool
-# กลับมาที่ /internal/tools ของแอปนี้ — INTERNAL_TOKEN กันคนนอกยิง endpoint นั้นตรง ๆ
-PI_AGENT_URL = os.getenv("PI_AGENT_URL", "http://pi-agent:7070").rstrip("/")
-PI_AGENT_TIMEOUT = int(os.getenv("PI_AGENT_TIMEOUT", "150"))
-INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
 
 # cache โมเดลและ collection ไว้ใน memory ป้องกันการโหลดซ้ำทุก request
 _embedder: SentenceTransformer = None
@@ -349,39 +341,6 @@ SYSTEM_PROMPT = """คุณคือ "AI Tech Buddy" ผู้ช่วยเ�
 - **ห้ามเขียนว่า "เกินงบ" ถ้าราคาน้อยกว่าหรือเท่ากับงบเด็ดขาด** ราคาที่ต่ำกว่างบคือ "อยู่ในงบ" และผลต่าง (งบ ลบ ราคา) คือเงินที่ "เหลือ" ไม่ใช่ส่วนที่ "เกิน" ให้เทียบตัวเลขสองตัวก่อนเขียนทุกครั้ง
 - **ใช้โครงนี้เสมอ ห้ามข้ามไปตอบแบบสั้น** ถ้าช่องไหนหาค่าใน "ข้อมูลสินค้า" ไม่เจอจริง ๆ ให้เขียนเฉพาะช่องนั้นว่า "ไม่มีข้อมูลในระบบ" แล้วเขียนช่องที่เหลือตามปกติ ห้ามทิ้งทั้งโครง
 - **ห้ามเดาค่าที่ไม่มีในข้อมูลสินค้าเด็ดขาด** ห้ามคาดเดาสเปกจากชื่อรุ่น แบรนด์ หรือราคา"""
-
-# ต่อท้าย SYSTEM_PROMPT เฉพาะโหมด Pi Agent — บอกว่ามีเครื่องมืออะไร และใช้เมื่อไหร่
-# ชื่อ tool ต้องตรงกับ TOOLS ด้านล่างและ pi-agent/server.mjs
-PI_TOOL_GUIDE = """
-
-เครื่องมือค้นข้อมูล (โหมดนี้เท่านั้น):
-
-"ข้อมูลสินค้า" ที่แนบมากับคำถามถูกค้นมาให้แล้วหนึ่งรอบ แต่อาจยังไม่ครบ คุณเรียกเครื่องมือเหล่านี้เพื่อค้นเพิ่มได้:
-- filter_laptops: กรองจากสเปกจริงของทุกรุ่น เช่น GPU หรือ CPU ที่ระบุ, RAM ขั้นต่ำ, คะแนนขั้นต่ำ, ช่วงราคา แล้วเรียงตามราคาหรือคะแนน — ใช้เมื่อคำถามมีเงื่อนไขสเปกชัดเจน หรือต้องการ "ทุกรุ่น" ที่ตรงเงื่อนไข
-- search_laptops: ค้นตามความหมาย เช่น การใช้งาน หรือความรู้สึกจากรีวิว (แบตอึด เครื่องเบา จอสวย เสียงพัดลม)
-- get_laptop_details: ดูสเปกเต็มและรีวิวทั้งหมดของรุ่นที่ลูกค้าเอ่ยชื่อ
-
-กติกาการใช้เครื่องมือ:
-- ถ้าข้อมูลที่แนบมาพอตอบแล้ว ให้ตอบเลย ไม่ต้องเรียกเครื่องมือ
-- ถ้าลูกค้าเอ่ยชื่อรุ่นหรือสเปกที่ไม่มีในข้อมูลที่แนบ หรือขอเปรียบเทียบหลายรุ่นแต่ข้อมูลยังไม่ครบ ให้เรียกเครื่องมือก่อนตอบ
-- ลูกค้าบอกงบ -> ส่ง max_price ทุกครั้ง แล้วคัดลอกตัวเลขจาก "ส่วนต่างงบ" ที่เครื่องมือคำนวณมาให้ ห้ามคำนวณเอง
-- ข้อมูลจากเครื่องมือนับเป็น "ข้อมูลสินค้า" เช่นกัน กฎทุกข้อด้านบน (ขอบเขต งบ รูปแบบคำตอบ) ยังใช้เหมือนเดิม
-- ค้นแล้วไม่เจอ ให้บอกตรง ๆ ว่าไม่มีในข้อมูลที่ผมมี ห้ามเดา
-- เครื่องมือทั้งหมดค้นได้แค่ข้อมูลโน้ตบุ๊คในระบบ ไม่มีเครื่องมือค้นอินเทอร์เน็ต — ห้ามใช้เครื่องมือกับเรื่องนอกโน้ตบุ๊ค
-- ห้ามเล่าในคำตอบว่าเรียกเครื่องมืออะไร ให้ตอบลูกค้าตามรูปแบบที่กำหนดเท่านั้น"""
-
-# ต่อท้าย "คำถามลูกค้า" ในโหมด Pi Agent — ตำแหน่งท้ายสุดคือจุดที่โมเดลให้น้ำหนักมากที่สุด
-# (ทดสอบกับ Gemma 4 31B: ถ้ามีแค่ PI_TOOL_GUIDE ใน system prompt โมเดลไม่เรียก tool เลยสักครั้ง
-#  และตอบ "ไม่มีข้อมูล" กับคำถามเทียบรุ่นที่มีอยู่จริง เพราะกฎ "ตอบไม่ได้ให้ปฏิเสธ" ด้านบนชนะ)
-PI_TURN_NOTE = (
-    "\n\n(ข้อมูลสินค้าด้านบนเป็นผลค้นรอบแรกเท่านั้น อาจยังไม่ครบ "
-    "ถ้าคำถามเอ่ยชื่อรุ่น ชื่อซีรีส์ หรือสเปกเฉพาะ เช่น การ์ดจอ/ซีพียูรุ่นไหน หรือขอเปรียบเทียบ/ขอหลายรุ่น "
-    "ให้เรียกเครื่องมือค้นก่อนตอบ: ชื่อรุ่น -> get_laptop_details, เงื่อนไขสเปก -> filter_laptops "
-    "**ห้ามตอบว่าไม่มีข้อมูลโดยยังไม่ได้ค้นด้วยเครื่องมือ** "
-    "ยกเว้นคำถามความรู้ทั่วไปที่ไม่เกี่ยวกับรุ่นใดในข้อมูล ให้ปฏิเสธตามกฎได้เลย "
-    "และถ้าเป็นเรื่องนอกโน้ตบุ๊คเลย ไม่ต้องเรียกเครื่องมือ ให้ชวนกลับมาเรื่องโน้ตบุ๊คตามกฎ)"
-)
-
 
 # ---- ดึงงบประมาณจากคำถาม (ใช้กรองราคาก่อนค้นหา) ----
 # ปัญหา: vector search จัดอันดับด้วย "ความหมายใกล้เคียง" ไม่เข้าใจตัวเลข
@@ -721,7 +680,7 @@ RAG_PIPELINE = os.getenv("RAG_PIPELINE", "v2").lower()
 
 
 def use_v2(job: dict) -> bool:
-    return RAG_PIPELINE == "v2" and job["engine"] != llm.ENGINE_PI
+    return RAG_PIPELINE == "v2"
 RAM_SIZES = {4, 8, 12, 16, 24, 32, 48, 64, 96, 128}
 MAX_LIST = 15           # รุ่นที่ไล่ชื่อในบรรทัดสรุปผลค้นตรงได้สูงสุด
 _RE_RAM_ASK = re.compile(
@@ -1032,7 +991,6 @@ def build_prompt(
     budget: int | None = None,
     over_budget: bool = False,
     min_price: int | None = None,
-    include_system: bool = True,
     no_think: bool = False,
 ) -> str:
     """ประกอบข้อความทั้งก้อนที่จะส่งให้ LLM
@@ -1040,8 +998,7 @@ def build_prompt(
     (ถ้าปล่อยให้ประกอบคนละที่ สองฝั่งจะเพี้ยนจากกันเมื่อแก้โค้ดภายหลัง)
 
     โมเดล 8B รับ system role ได้ไม่ดีเท่ารุ่นใหญ่ เลยยุบ system + ประวัติ + context + คำถาม
-    ไว้ใน user message เดียว — ส่วนโหมด Pi Agent ส่ง system prompt แยก (include_system=False)
-    เพราะ agent ต้องวาง system prompt ไว้หน้าคำประกาศ tool
+    ไว้ใน user message เดียว
     """
     context_text = "\n".join(f"- {with_levels(c)}" for c in context)
 
@@ -1129,8 +1086,9 @@ def build_prompt(
             "ห้ามตัดให้เหลือไม่กี่รุ่น แล้วปิดด้วยสรุปสั้น ๆ 1-2 ประโยค ไม่ต้องใช้โครงแนะนำเต็ม)"
         )
 
-    head = f"{SYSTEM_PROMPT}\n\n" if include_system else ""
-    return f"""{head}ประวัติบทสนทนา:
+    return f"""{SYSTEM_PROMPT}
+
+ประวัติบทสนทนา:
 {history_text if history_text else "(เริ่มต้นใหม่)"}
 {budget_note}
 ข้อมูลสินค้า:
@@ -1156,10 +1114,10 @@ def generate(
     provider: dict | None = None,
     trace: dict | None = None,
 ) -> str:
-    """โหมด classic: ส่ง prompt ก้อนเดียวไปที่ endpoint แบบ OpenAI ของ provider ที่เลือก
+    """RAG v1: ส่ง prompt ก้อนเดียวไปที่ endpoint แบบ OpenAI ของ provider ที่เลือก
     trace (โหมด debug): บันทึก prompt ทั้งก้อน ค่าที่ส่งไป เวลา โทเคน และความคิดของโมเดล (ถ้ามี)"""
     # เรียกด้วย requests ตรง ๆ (gateway ของ ThaiLLM บล็อก header ที่ openai library แนบมา)
-    provider = provider or llm.pick(None, llm.ENGINE_CLASSIC)[0]
+    provider = provider or llm.pick(None)[0]
     if provider is None:
         raise LLMError("ยังไม่มี AI ที่ใช้งานได้ — ตั้งค่าใน .env / providers.json ก่อน")
 
@@ -1215,93 +1173,8 @@ def llm_trace(data: dict, raw: str, seconds: float) -> dict:
     }
 
 
-def generate_pi(
-    question: str,
-    context: list[str],
-    history: list,
-    budget: int | None = None,
-    over_budget: bool = False,
-    min_price: int | None = None,
-    provider: dict | None = None,
-) -> tuple[str, list[dict]]:
-    """โหมด Pi Agent: ส่งให้ pi-agent รัน agent loop — AI เห็นข้อมูลชุดเดียวกับโหมด classic
-    แล้วเรียก tool ค้นเพิ่มเองได้ถ้ายังไม่พอ คืน (คำตอบ, รายการ tool ที่ถูกเรียก)
-
-    ส่ง context ที่ค้นมาแล้วไปด้วยเสมอ แทนที่จะให้ agent เริ่มค้นจากศูนย์ — คำตอบจึงไม่มีทาง
-    แย่กว่าโหมด classic และคำถามง่าย ๆ ตอบได้ในรอบเดียวโดยไม่เสียเวลาเรียก tool
-    """
-    try:
-        resp = requests.post(
-            f"{PI_AGENT_URL}/chat",
-            json=pi_request_body(question, context, history, budget, over_budget, min_price, provider),
-            timeout=PI_AGENT_TIMEOUT,
-        )
-    except requests.RequestException as e:
-        raise LLMError(f"ติดต่อ pi-agent ไม่ได้ ({e}) — เช็คว่า service pi-agent รันอยู่") from e
-
-    data = _json_body(resp)
-    if not resp.ok or data.get("error"):
-        raise LLMError(f"{provider['label']} (Pi Agent) error: {data.get('error') or resp.text[:300]}")
-    return strip_think(data.get("message") or "") or EMPTY_ANSWER, data.get("tools", [])
-
-
-def pi_request_body(question, context, history, budget, over_budget, min_price, provider) -> dict:
-    """body ที่ส่งให้ pi-agent (/chat และ /chat/stream ใช้ชุดเดียวกัน)"""
-    prompt = build_prompt(question, context, history, budget, over_budget, min_price,
-                          include_system=False)
-    # /no_think ต้องอยู่ท้ายสุดเสมอ จึงต่อเองหลัง PI_TURN_NOTE แทนให้ build_prompt ใส่
-    no_think = llm.wants_no_think_suffix(provider, DISABLE_THINKING)
-    prompt += PI_TURN_NOTE + (" /no_think" if no_think else "")
-    return {
-        "provider": llm.agent_config(provider),
-        "system_prompt": SYSTEM_PROMPT + PI_TOOL_GUIDE,
-        "prompt": prompt,
-    }
-
-
-def _json_body(resp) -> dict:
-    return resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-
-
-def generate_pi_stream(
-    question: str,
-    context: list[str],
-    history: list,
-    budget: int | None = None,
-    over_budget: bool = False,
-    min_price: int | None = None,
-    provider: dict | None = None,
-):
-    """โหมด Pi Agent แบบทยอยส่ง: yield event ของหน้าเว็บ (ดู relay_pi_events) ระหว่าง agent ทำงาน
-    event สุดท้ายคือ {"type": "done", "message": คำตอบ, "tools": [...]} — พังเมื่อไหร่ raise LLMError"""
-    label = f"{provider['label']} (Pi Agent)"
-    try:
-        # timeout คู่ (เชื่อมต่อ, รอ byte ถัดไป) — ระหว่างสตรีมนับใหม่ทุกครั้งที่มี event เข้ามา
-        resp = requests.post(
-            f"{PI_AGENT_URL}/chat/stream",
-            json=pi_request_body(question, context, history, budget, over_budget, min_price, provider),
-            stream=True,
-            timeout=(10, PI_AGENT_TIMEOUT),
-        )
-    except requests.RequestException as e:
-        raise LLMError(f"ติดต่อ pi-agent ไม่ได้ ({e}) — เช็คว่า service pi-agent รันอยู่") from e
-
-    # with: ผู้ใช้ปิดหน้ากลางคัน -> generator ถูกปิด -> ตัดสายกับ pi-agent ซึ่งจะสั่งหยุด agent ต่อ
-    with resp:
-        if not resp.ok:
-            raise LLMError(f"{label} error: {_json_body(resp).get('error') or resp.text[:300]}")
-        try:
-            yield from relay_pi_events(resp.iter_lines(), label)
-        except requests.RequestException as e:
-            raise LLMError(f"{label}: การเชื่อมต่อกับ pi-agent ขาดกลางคัน ({e})") from e
-
-
-# ---- Tool สำหรับ Pi Agent ----
-# pi-agent เรียกผ่าน POST /internal/tools/<ชื่อ> แล้วส่งข้อความที่ได้ให้ LLM อ่านต่อ
-# ข้อความสเปกใช้เอกสารชุดเดียวกับ vector index (ดึงจาก Chroma) เพื่อให้รูปแบบตรงกับโหมด classic
-# และ budget_diff_table() อ่านราคาได้ ส่วนการกรองตามสเปกใช้ laptops.json ที่มีฟิลด์แยกครบ
-TOOL_MAX_LIMIT = 15
-
+# ---- ข้อมูลโน้ตบุ๊คดิบ (laptops.json) ----
+# rag_v2 ใช้คัดตามสเปก ส่วน RAG v1 ใช้ค้นตรงตามชื่อรุ่น/สเปก (exact_match) เสริม vector search
 _laptops: list[dict] | None = None
 _spec_doc_by_name: dict[str, str] | None = None
 
@@ -1321,181 +1194,20 @@ def get_spec_doc_by_name() -> dict[str, str]:
     return _spec_doc_by_name
 
 
-def _int_arg(args: dict, key: str) -> int | None:
-    """อ่านตัวเลขจาก argument ของ tool — LLM บางตัวส่งมาเป็น string "25,000" """
-    raw = args.get(key)
-    if raw in (None, ""):
-        return None
-    try:
-        value = int(float(str(raw).replace(",", "")))
-    except ValueError:
-        raise ValueError(f"{key} ต้องเป็นตัวเลข (ได้ {raw!r})")
-    return value if value > 0 else None
-
-
-def _limit_arg(args: dict, default: int) -> int:
-    return max(1, min(_int_arg(args, "limit") or default, TOOL_MAX_LIMIT))
-
-
 def _ram_gb(ram: str) -> int:
     m = re.search(r"(\d+)\s*GB", ram or "", re.IGNORECASE)
     return int(m.group(1)) if m else 0
 
 
-def _norm(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "").lower()).strip()
-
-
-def _price_note(budget: int | None, docs: list[str]) -> str:
-    return budget_diff_table(docs, budget) if budget else ""
-
-
-def tool_search_laptops(args: dict) -> str:
-    """ค้นตามความหมาย (สเปก + รีวิว) — ใช้ retrieve() ตัวเดียวกับโหมด classic"""
-    query = str(args.get("query") or "").strip()
-    if not query:
-        raise ValueError("ต้องระบุ query")
-    max_price, min_price = _int_arg(args, "max_price"), _int_arg(args, "min_price")
-    docs, over = retrieve(query, k_spec=_limit_arg(args, TOP_K_SPEC), k_review=TOP_K_REVIEW,
-                          budget=max_price, min_price=min_price)
-    docs = [d for d in docs if not is_summary_doc(d)]
-    head = (
-        "ไม่มีรุ่นไหนอยู่ในช่วงราคาที่ขอ — รายการด้านล่างคือรุ่นที่ใกล้เคียงที่สุด\n" if over else ""
-    )
-    return head + "\n".join(f"- {with_levels(d)}" for d in docs) + _price_note(max_price, docs)
-
-
-_SORTS = {
-    "price_asc": (lambda lp: lp["ราคา"], False, "ราคาจากถูกไปแพง"),
-    "price_desc": (lambda lp: lp["ราคา"], True, "ราคาจากแพงไปถูก"),
-    "gpu_score": (lambda lp: lp.get("benchmark", {}).get("GPU Score") or 0, True, "คะแนน GPU สูงสุดก่อน"),
-    "cpu_score": (lambda lp: lp.get("benchmark", {}).get("CPU Score") or 0, True, "คะแนน CPU สูงสุดก่อน"),
-}
-_TEXT_FILTERS = ("cpu", "gpu", "display", "storage", "os")
-
-
-def tool_filter_laptops(args: dict) -> str:
-    """กรองตามสเปกจริงจาก laptops.json — ตอบคำถามแบบ "RTX 4060 มีรุ่นไหนบ้าง" ได้ครบทุกรุ่น
-    (vector search คืนแค่ top-k ที่ความหมายใกล้ อาจตกหล่นรุ่นที่ตรงเงื่อนไข)"""
-    max_price, min_price = _int_arg(args, "max_price"), _int_arg(args, "min_price")
-    min_ram = _int_arg(args, "min_ram_gb")
-    min_cpu, min_gpu = _int_arg(args, "min_cpu_score"), _int_arg(args, "min_gpu_score")
-    sort_key, reverse, sort_label = _SORTS.get(str(args.get("sort_by") or "price_asc"), _SORTS["price_asc"])
-    text_filters = {k: _norm(str(args[k])) for k in _TEXT_FILTERS if args.get(k)}
-
-    def match(lp: dict) -> bool:
-        spec, bench = lp.get("spec", {}), lp.get("benchmark", {})
-        if max_price and lp["ราคา"] > max_price:
-            return False
-        if min_price and lp["ราคา"] < min_price:
-            return False
-        if min_ram and _ram_gb(spec.get("RAM", "")) < min_ram:
-            return False
-        if min_cpu and (bench.get("CPU Score") or 0) < min_cpu:
-            return False
-        if min_gpu and (bench.get("GPU Score") or 0) < min_gpu:
-            return False
-        return all(want in _norm(spec.get(k.upper(), "")) for k, want in text_filters.items())
-
-    found = sorted((lp for lp in get_laptops() if match(lp)), key=sort_key, reverse=reverse)
-    if not found:
-        return "ไม่พบรุ่นที่ตรงทุกเงื่อนไขในข้อมูลที่มี (ลองผ่อนเงื่อนไขบางข้อ หรือใช้ search_laptops)"
-
-    shown = found[:_limit_arg(args, 8)]
-    by_name = get_spec_doc_by_name()
-    docs = [by_name.get(lp["ชื่อสินค้า"], lp["ชื่อสินค้า"]) for lp in shown]
-    return (
-        f"พบ {len(found)} รุ่นที่ตรงเงื่อนไข แสดง {len(shown)} รุ่น เรียงตาม{sort_label}:\n"
-        + "\n".join(f"- {with_levels(d)}" for d in docs)
-        + _price_note(max_price, docs)
-    )
-
-
-def tool_get_laptop_details(args: dict) -> str:
-    """สเปกเต็ม + รีวิวทั้งหมดของรุ่นที่ระบุชื่อ (จับคู่แบบไม่สนตัวพิมพ์ เอาเฉพาะชื่อที่มีทุกคำที่ค้น)"""
-    name = _norm(str(args.get("name") or ""))
-    if not name:
-        raise ValueError("ต้องระบุ name")
-    words = name.split()
-    names = [lp["ชื่อสินค้า"] for lp in get_laptops()]
-    hits = [n for n in names if all(w in _norm(n) for w in words)]
-    # ชื่อที่มีคำค้นต่อกันเป็นก้อนเดียวมาก่อน ("legion 5" ต้องเจอ Legion 5 ก่อน Legion 9i ที่บังเอิญมีเลข 5)
-    hits.sort(key=lambda n: (name not in _norm(n), len(n)))
-    if not hits:
-        # ไม่เจอตรง ๆ -> เสนอชื่อที่มีคำซ้ำมากที่สุดให้ AI เลือกถามลูกค้าต่อ
-        scored = sorted(names, key=lambda n: -sum(w in _norm(n) for w in words))[:5]
-        return f"ไม่พบรุ่นที่ชื่อตรงกับ \"{name}\" ในข้อมูล ชื่อที่ใกล้เคียง: " + " / ".join(scored)
-
-    by_name = get_spec_doc_by_name()
-    parts = []
-    for n in hits[:3]:
-        res = get_collection().get(
-            where={"$and": [{"type": {"$eq": "review"}}, {"name": {"$eq": n}}]}, include=["documents"]
-        )
-        reviews = "\n".join(f"  - {r}" for r in res["documents"]) or "  - (ไม่มีรีวิว)"
-        parts.append(f"- {with_levels(by_name.get(n, n))}\n  รีวิวจากผู้ใช้:\n{reviews}")
-    more = f"\n(ยังมีอีก {len(hits) - 3} รุ่นที่ชื่อตรง ระบุชื่อให้ละเอียดขึ้นถ้าต้องการ)" if len(hits) > 3 else ""
-    return "\n".join(parts) + more
-
-
-TOOLS = {
-    "search_laptops": tool_search_laptops,
-    "filter_laptops": tool_filter_laptops,
-    "get_laptop_details": tool_get_laptop_details,
-}
-
-
-# ---- สตรีมความคืบหน้าไปที่หน้าเว็บ (/chat/stream) ----
-# โหมด Pi Agent ใช้เวลา 8-18 วิ (เรียก tool หลายรอบ) จึงทยอยส่ง event เป็น Server-Sent Events
-# แต่ละ event คือบรรทัด "data: {json}" ตามด้วยบรรทัดว่าง:
-#   {"type": "status",  "text": ...}   ระบบกำลังทำอะไร เช่น "กำลังกรองสเปก: RTX 4060 · ไม่เกิน 40,000 บาท…"
+# ---- สตรีมคำตอบไปที่หน้าเว็บ (/chat/stream) ----
+# ทยอยส่ง event เป็น Server-Sent Events แต่ละ event คือบรรทัด "data: {json}" ตามด้วยบรรทัดว่าง:
+#   {"type": "status",  "text": ...}   ระบบกำลังทำอะไร
 #   {"type": "delta",   "text": ...}   ข้อความคำตอบที่เพิ่งพิมพ์ต่อท้าย
-#   {"type": "replace", "text": ...}   ทิ้งข้อความที่โชว์ไปแล้วแล้วใช้ค่านี้แทน (เจอ <think> / AI ขึ้นข้อความใหม่หลังเรียก tool)
+#   {"type": "replace", "text": ...}   ทิ้งข้อความที่โชว์ไปแล้วแล้วใช้ค่านี้แทน (เจอ <think>)
 #   {"type": "done",    "message": ..., "meta": ..., "commit": ...}   คำตอบสุดท้ายที่ต้องใช้จริง
 #   {"type": "error",   "error": ...}
-TOOL_STATUS = {
-    "filter_laptops": "กำลังกรองสเปก",
-    "search_laptops": "กำลังค้นสเปกและรีวิว",
-    "get_laptop_details": "กำลังดูรายละเอียดรุ่น",
-}
 STATUS_SEARCHING = "กำลังค้นข้อมูลในร้าน…"
-STATUS_AGENT = "AI กำลังอ่านข้อมูลที่ค้นมา…"
 STATUS_WRITING = "กำลังเรียบเรียงคำตอบ…"
-
-
-def _safe_int_arg(args: dict, key: str) -> int | None:
-    try:
-        return _int_arg(args, key)
-    except ValueError:
-        return None
-
-
-def tool_status(name: str, args) -> str:
-    """ข้อความสถานะตอน agent เรียก tool — มีเงื่อนไขที่ AI ส่งมาด้วย ผู้ใช้จะได้เห็นว่ามันค้นอะไรอยู่"""
-    args = args if isinstance(args, dict) else {}
-    label = TOOL_STATUS.get(name, f"กำลังเรียกเครื่องมือ {name}")
-    parts = []
-    query = str(args.get("query") or "").strip()
-    if query:
-        parts.append(f"“{query}”")
-    for key in ("name", "gpu", "cpu", "display", "storage", "os"):
-        value = str(args.get(key) or "").strip()
-        if value:
-            parts.append(value)
-    ram = _safe_int_arg(args, "min_ram_gb")
-    if ram:
-        parts.append(f"RAM {ram}GB ขึ้นไป")
-    lo, hi = _safe_int_arg(args, "min_price"), _safe_int_arg(args, "max_price")
-    if lo and hi:
-        parts.append(f"{lo:,}–{hi:,} บาท")
-    elif hi:
-        parts.append(f"ไม่เกิน {hi:,} บาท")
-    elif lo:
-        parts.append(f"ตั้งแต่ {lo:,} บาท")
-    detail = " · ".join(parts)
-    if len(detail) > 80:
-        detail = detail[:79] + "…"
-    return f"{label}: {detail}…" if detail else f"{label}…"
 
 
 _THINK_OPEN = "<think>"
@@ -1509,57 +1221,6 @@ def visible_answer(raw: str) -> str:
         if text.endswith(_THINK_OPEN[:n]):
             return text[:-n].rstrip()
     return text
-
-
-def relay_pi_events(lines, label: str = "Pi Agent"):
-    """แปลง NDJSON จาก pi-agent /chat/stream เป็น event ของหน้าเว็บ (รูปแบบอยู่ด้านบน)
-    จบด้วย {"type": "done", "message": คำตอบที่ strip_think แล้ว, "tools": [...]}
-    pi-agent แจ้ง error หรือสายขาดก่อนจบ -> raise LLMError"""
-    raw = shown = ""
-    running: dict[str, str] = {}   # tool ที่ยังทำงานอยู่ (id -> ข้อความสถานะ)
-    for line in lines:
-        if not line:
-            continue
-        try:
-            ev = json.loads(line)
-        except ValueError:
-            continue
-        kind = ev.get("type")
-
-        if kind == "message_start":
-            # AI ขึ้นข้อความใหม่ (เช่น หลังได้ผลจาก tool) — ข้อความรอบก่อนไม่ใช่คำตอบสุดท้าย
-            raw = ""
-            if shown:
-                shown = ""
-                yield {"type": "replace", "text": ""}
-        elif kind == "text":
-            raw += ev.get("delta") or ""
-            text = visible_answer(raw)
-            if text == shown:
-                continue
-            # strip_think อาจตัดของที่โชว์ไปแล้วทิ้ง (เพิ่งเจอ </think>) -> ส่งข้อความทั้งก้อนแทน
-            if text.startswith(shown):
-                yield {"type": "delta", "text": text[len(shown):]}
-            else:
-                yield {"type": "replace", "text": text}
-            shown = text
-        elif kind == "tool_start":
-            status = tool_status(ev.get("name") or "", ev.get("args"))
-            running[str(ev.get("id"))] = status
-            yield {"type": "status", "text": status}
-        elif kind == "tool_end":
-            running.pop(str(ev.get("id")), None)
-            yield {"type": "status", "text": next(reversed(running.values()), STATUS_WRITING)}
-        elif kind == "done":
-            yield {
-                "type": "done",
-                "message": strip_think(ev.get("message") or "") or EMPTY_ANSWER,
-                "tools": ev.get("tools") or [],
-            }
-            return
-        elif kind == "error":
-            raise LLMError(f"{label} error: {ev.get('error') or 'ไม่ทราบสาเหตุ'}")
-    raise LLMError(f"{label}: pi-agent ปิดการเชื่อมต่อก่อนตอบเสร็จ")
 
 
 def sse(event: dict) -> str:
@@ -1601,23 +1262,6 @@ def save_turn(history: list, question: str, answer: str) -> None:
     session["history"] = history[-MAX_HISTORY_MSGS:]
 
 
-@app.route("/internal/tools/<name>", methods=["POST"])
-def internal_tool(name):
-    """endpoint ให้ pi-agent เรียก tool — ต้องแนบ X-Internal-Token ที่ตรงกับ INTERNAL_TOKEN"""
-    token = request.headers.get("X-Internal-Token", "")
-    if not INTERNAL_TOKEN or not hmac.compare_digest(token, INTERNAL_TOKEN):
-        return jsonify({"error": "forbidden"}), 403
-    fn = TOOLS.get(name)
-    if fn is None:
-        return jsonify({"error": f"ไม่มี tool ชื่อ {name}"}), 404
-
-    args = request.get_json(silent=True)
-    try:
-        return jsonify({"text": fn(args if isinstance(args, dict) else {})})
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-
-
 @app.context_processor
 def static_version():
     """เลขเวอร์ชันต่อท้าย URL ของ CSS/JS ในหน้าเว็บ (= เวลาแก้ไฟล์ล่าสุด)
@@ -1657,8 +1301,8 @@ def _chat_request():
         # กันข้อความยาวผิดปกติมาถ่วงเธรด (gunicorn มีแค่ 1 worker)
         return None, (jsonify({"error": f"ข้อความยาวเกินไป (สูงสุด {MAX_MSG_LEN:,} ตัวอักษร)"}), 413)
 
-    # AI และโหมดที่ผู้ใช้เลือกจากหน้าเว็บ (ไม่ส่งมา = ใช้ค่าเริ่มต้นใน .env)
-    provider, engine, pick_error = llm.pick(data.get("provider"), data.get("engine"))
+    # AI ที่ผู้ใช้เลือกจากหน้าเว็บ (ไม่ส่งมา = ใช้ค่าเริ่มต้นใน .env)
+    provider, pick_error = llm.pick(data.get("provider"))
     if pick_error:
         return None, (jsonify({"error": pick_error}), 400)
 
@@ -1689,7 +1333,7 @@ def _chat_request():
         else:
             session["budget_min"] = min_price
 
-    return {"message": user_msg, "provider": provider, "engine": engine, "history": history,
+    return {"message": user_msg, "provider": provider, "history": history,
             "budget": budget, "min_price": min_price, "budget_from": budget_from,
             # ขอดูกระบวนการคิดได้เฉพาะตอนผู้ดูแลเปิด DEBUG_PANEL ไว้ (ปิดอยู่ = ไม่สนค่าที่ส่งมา)
             "debug": DEBUG_PANEL and data.get("debug") is True}, None
@@ -1701,7 +1345,6 @@ def new_trace(job: dict) -> dict | None:
         return None
     q = job["message"]
     return {
-        "engine": job["engine"],
         "query": {
             "budget": job["budget"],
             "min_price": job["min_price"],
@@ -1716,14 +1359,12 @@ def new_trace(job: dict) -> dict | None:
     }
 
 
-def chat_meta(job: dict, tools_used: list[dict], started: float) -> dict:
-    # หน้าเว็บแสดงบรรทัดเล็ก ๆ ใต้คำตอบว่าใครตอบ ด้วยโหมดไหน ค้นเพิ่มกี่ครั้ง
+def chat_meta(job: dict, started: float) -> dict:
+    # หน้าเว็บแสดงบรรทัดเล็ก ๆ ใต้คำตอบว่า AI ตัวไหนตอบ ใช้เวลาเท่าไหร่
     provider = job["provider"]
     return {
         "provider": provider["id"],
         "provider_label": provider.get("short") or provider["label"],
-        "engine": job["engine"],
-        "tools": [t.get("name") for t in tools_used],
         "elapsed": round(time.time() - started, 1),
     }
 
@@ -1752,35 +1393,29 @@ def chat():
         except Exception as e:
             return jsonify({"error": f"RAG error: {e}", **debug_part}), 500
         save_turn(history, user_msg, answer)
-        return jsonify({"message": answer, "meta": chat_meta(job, [], started), **debug_part})
+        return jsonify({"message": answer, "meta": chat_meta(job, started), **debug_part})
     try:
         context, over_budget = retrieve(user_msg, budget=budget, min_price=min_price, trace=trace)
     except Exception as e:
         return jsonify({"error": f"Vector search error: {e}", **debug_part}), 500
 
-    tools_used: list[dict] = []
     try:
-        if job["engine"] == llm.ENGINE_PI:
-            answer, tools_used = generate_pi(user_msg, context, history, budget=budget,
-                                             over_budget=over_budget, min_price=min_price,
-                                             provider=provider)
-        else:
-            answer = generate(user_msg, context, history, budget=budget,
-                              over_budget=over_budget, min_price=min_price, provider=provider,
-                              trace=trace)
+        answer = generate(user_msg, context, history, budget=budget,
+                          over_budget=over_budget, min_price=min_price, provider=provider,
+                          trace=trace)
     except LLMError as e:
         return jsonify({"error": str(e), **debug_part}), 502
     except Exception as e:
         return jsonify({"error": f"LLM error: {e}", **debug_part}), 500
 
     save_turn(history, user_msg, answer)
-    return jsonify({"message": answer, "meta": chat_meta(job, tools_used, started), **debug_part})
+    return jsonify({"message": answer, "meta": chat_meta(job, started), **debug_part})
 
 
 @app.route("/chat/stream", methods=["POST"])
 def chat_stream():
-    """เหมือน /chat แต่ตอบเป็น Server-Sent Events: บอกสถานะระหว่างทาง (ค้นข้อมูล / เรียก tool)
-    และทยอยส่งข้อความคำตอบของโหมด Pi Agent ตามที่ AI พิมพ์ (โหมด classic ส่งคำตอบทีเดียวตอนจบ)
+    """เหมือน /chat แต่ตอบเป็น Server-Sent Events: บอกสถานะระหว่างทาง แล้วทยอยส่งคำตอบตามที่ AI พิมพ์
+    (RAG v1 ส่งคำตอบทีเดียวตอนจบ)
 
     error ที่รู้ก่อนเริ่มตอบ (JSON พัง, ถามถี่เกิน ...) ตอบเป็น JSON + status code แบบเดียวกับ /chat
     ส่วน error ระหว่างสตรีมส่งเป็น event {"type": "error"} เพราะ status 200 ถูกส่งไปแล้ว
@@ -1819,7 +1454,7 @@ def chat_stream():
             except Exception as e:
                 yield sse({"type": "error", "error": f"RAG error: {e}", **debug_part})
                 return
-            yield sse({"type": "done", "message": answer, "meta": chat_meta(job, [], started),
+            yield sse({"type": "done", "message": answer, "meta": chat_meta(job, started),
                        "commit": commit_token(user_msg, answer), **debug_part})
 
         return Response(events_v2(), mimetype="text/event-stream", headers={
@@ -1835,22 +1470,11 @@ def chat_stream():
             yield sse({"type": "error", "error": f"Vector search error: {e}", **debug_part})
             return
 
-        tools_used: list[dict] = []
         try:
-            if job["engine"] == llm.ENGINE_PI:
-                yield sse({"type": "status", "text": STATUS_AGENT})
-                for ev in generate_pi_stream(user_msg, context, history, budget=budget,
-                                             over_budget=over_budget, min_price=min_price,
-                                             provider=provider):
-                    if ev["type"] == "done":
-                        answer, tools_used = ev["message"], ev["tools"]
-                    else:
-                        yield sse(ev)
-            else:
-                yield sse({"type": "status", "text": STATUS_WRITING})
-                answer = generate(user_msg, context, history, budget=budget,
-                                  over_budget=over_budget, min_price=min_price, provider=provider,
-                                  trace=trace)
+            yield sse({"type": "status", "text": STATUS_WRITING})
+            answer = generate(user_msg, context, history, budget=budget,
+                              over_budget=over_budget, min_price=min_price, provider=provider,
+                              trace=trace)
         except LLMError as e:
             yield sse({"type": "error", "error": str(e), **debug_part})
             return
@@ -1858,13 +1482,10 @@ def chat_stream():
             yield sse({"type": "error", "error": f"LLM error: {e}", **debug_part})
             return
 
-        if trace is not None and tools_used:
-            # โหมดค้นละเอียด: prompt/เวลาของ AI อยู่ฝั่ง pi-agent — บอกได้แค่ว่าค้นเพิ่มอะไรไปบ้าง
-            trace["tools"] = tools_used
         yield sse({
             "type": "done",
             "message": answer,
-            "meta": chat_meta(job, tools_used, started),
+            "meta": chat_meta(job, started),
             "commit": commit_token(user_msg, answer),
             **debug_part,
         })

@@ -1,8 +1,7 @@
 {
   "_คำอธิบาย": [
-    "รายการ AI ที่ผู้ใช้เลือกได้จากหน้าเว็บ — เพิ่ม/ลบได้ที่ไฟล์นี้ไฟล์เดียว (แก้แล้วรีสตาร์ต teddy)",
-    "kind=openai-compatible : endpoint แบบ OpenAI (vLLM, Ollama, ThaiLLM ฯลฯ) ใช้ได้ทั้งโหมด Pi Agent และ RAG แบบเดิม",
-    "kind=pi-builtin        : ใช้ provider ที่ pi รู้จักอยู่แล้ว (openai/anthropic/google ฯลฯ) ใช้ได้เฉพาะโหมด Pi Agent",
+    "รายการ AI ที่เลือกได้ — เพิ่ม/ลบได้ที่ไฟล์นี้ไฟล์เดียว (แก้แล้วรีสตาร์ต teddy)",
+    "kind=openai-compatible : endpoint แบบ OpenAI (/chat/completions) เช่น Ollama, vLLM, ThaiLLM — รองรับแบบเดียวนี้",
     "*_env                  : อ่านค่าจาก environment ก่อน ถ้าไม่ตั้งค่อยใช้ค่าในไฟล์นี้",
     "key_required=true      : ถ้ายังไม่ตั้ง API key ตัวเลือกจะขึ้นเป็นสีเทา กดเลือกไม่ได้"
   ],
@@ -48,54 +47,6 @@
       "key_required": true,
       "context_window": 65536,
       "max_tokens": 3072
-    },
-    {
-      "_note": "Gemini API ไม่มี Gemma 12B แล้ว (gemma-3-12b-it = 404) ตัวเล็กสุดที่มีคือ 26B A4B (ใช้งานจริงราว 4B ต่อ token) / ช่องทางแบบ OpenAI ของ Gemini ตอบ 500 กับ Gemma จึงใช้ผ่าน pi (API หลักของ Google) ได้เฉพาะโหมด Pi Agent",
-      "id": "gemma-26b",
-      "label": "Google · Gemma 4 26B (A4B)",
-      "short": "Gemma 4 26B",
-      "kind": "pi-builtin",
-      "pi_provider": "google",
-      "model": "gemma-4-26b-a4b-it",
-      "api_key_env": "GEMINI_API_KEY",
-      "key_required": true,
-      "max_tokens": 3072
-    },
-    {
-      "id": "claude-sonnet",
-      "label": "Anthropic · Claude Sonnet 5.5",
-      "short": "Claude Sonnet 5.5",
-      "kind": "pi-builtin",
-      "pi_provider": "anthropic",
-      "model": "claude-sonnet-5-5",
-      "api_key_env": "ANTHROPIC_API_KEY",
-      "key_required": true,
-      "thinking": "low",
-      "max_tokens": 4096
-    },
-    {
-      "id": "openai-gpt",
-      "label": "OpenAI · GPT-5.4 mini",
-      "short": "GPT-5.4 mini",
-      "kind": "pi-builtin",
-      "pi_provider": "openai",
-      "model": "gpt-5.4-mini",
-      "api_key_env": "OPENAI_API_KEY",
-      "key_required": true,
-      "thinking": "low",
-      "max_tokens": 4096
-    },
-    {
-      "id": "gemini-flash",
-      "label": "Google · Gemini 3.5 Flash",
-      "short": "Gemini 3.5 Flash",
-      "kind": "pi-builtin",
-      "pi_provider": "google",
-      "model": "gemini-3.5-flash",
-      "api_key_env": "GEMINI_API_KEY",
-      "key_required": true,
-      "thinking": "low",
-      "max_tokens": 4096
     }
   ]
 }

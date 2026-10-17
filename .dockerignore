@@ -12,5 +12,3 @@ chroma_db/
 tests/
 docs/
 *.md
-# pi-agent มี image ของตัวเอง (pi-agent/Dockerfile) ไม่ต้อง copy เข้า image Python
-pi-agent/
