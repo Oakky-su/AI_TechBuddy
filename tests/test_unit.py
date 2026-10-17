@@ -774,6 +774,44 @@ def test_rag_v2():
                "จากที่ตรงเงื่อนไข 99 รุ่น" in v2.build_answer_prompt(plan(intent="list", filters={"ram_gb": 24}),
                                                                      picked, "แรม 24", [])), "")
 
+    if hasattr(v2, "spec_extras"):   # ความละเอียดจอ / SSD / Windows อ่านจากคำถามด้วยโค้ด
+        for q, want in (
+                ("รุ่นไหนจอความละเอียดสูงกว่า 2560x1600", {"res_gt": 2560}),
+                ("จอ 2560x1600 มีรุ่นไหนบ้าง", {"res_w": 2560, "res_h": 1600}),
+                ("จอ 2K งบไม่เกิน 40000", {"res_w": 2560}),
+                ("จอ 2K ขึ้นไป", {"res_min": 2560}),
+                ("จอ 4K มีไหม", {"res_w": 3840}),
+                ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", {"ssd_gen": [3, 5]}),
+                ("SSD Gen 4 ขึ้นไป งบ 30000", {"ssd_gen": [4, 5]}),
+                ("SSD 1TB งบ 30000", {"storage_gb": 1000}),
+                ("ความจุ 1TB ขึ้นไป", {"storage_min": 1000}),
+                ("รุ่นไหนใช้ Windows 11 Home Single Language", {"os": "single language"}),
+                ("มีรุ่นที่เป็น Windows 11 Pro ไหม", {"os": "pro"})):
+            check(R, f"อ่านเงื่อนไขสเปกจากคำถาม «{q}»", want, v2.spec_extras(q)[0], "")
+        for q in ("Core i7 Gen 13 งบ 35000", "Intel UHD Graphics รุ่นไหนถูกสุด", "งบ 25k เล่นเกม",
+                  "แรม 16GB งบ 25000", "Legion Pro 5 ราคาเท่าไหร่", "จอ 16 นิ้ว งบ 30000"):
+            check(R, f"ไม่อ่านเป็นเงื่อนไขจอ/SSD/Windows «{q}»", {}, v2.spec_extras(q)[0], "")
+        for q in ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", "รุ่นไหนจอความละเอียดสูงกว่า 2560x1600",
+                  "รุ่นไหนใช้ Windows 11 Home Single Language", "SSD 1TB งบ 30000"):
+            covered = v2.spec_extras(q)[1]
+            check(R, f"คัดได้แล้ว ไม่บอกว่าคัดไม่ได้ «{q}»", [],
+                  [t for t in v2.unsupported_terms(q) if t not in covered], "")
+        disp, stor = (lambda lp: lp["spec"]["DISPLAY"]), (lambda lp: lp["spec"]["STORAGE"])
+        width = lambda lp: int(re.search(r"\((\d{4})\s*x", disp(lp)).group(1)) if re.search(r"\((\d{4})\s*x", disp(lp)) else 0
+        for fl, want, label in (
+                ({"res_gt": 2560}, sum(width(lp) > 2560 for lp in laptops), "จอละเอียดกว่า 2560x1600"),
+                ({"res_w": 2560}, sum(width(lp) == 2560 for lp in laptops), "จอกว้าง 2560"),
+                ({"ssd_gen": [3, 5]}, sum(bool(re.search(r"Gen [35]$", stor(lp))) for lp in laptops), "SSD Gen 3 หรือ 5"),
+                ({"storage_gb": 1000}, sum(stor(lp).startswith("1TB") for lp in laptops), "ความจุ 1TB"),
+                ({"os": "single language"}, sum("Single Language" in lp["spec"]["OS"] for lp in laptops),
+                 "Windows Single Language")):
+            p = plan()
+            p["filters"].update(fl)   # โค้ดเป็นคนใส่ (normalize ไม่รับค่าพวกนี้จาก LLM)
+            check(R, f"กรอง{label} = ครบทุกรุ่น", want, v2.select(p, "")["total"], "")
+        p = plan()
+        p["filters"].update({"ssd_gen": [3, 5], "storage_gb": 1000})
+        check(R, "อธิบายเงื่อนไขใหม่เป็นภาษาคน", "SSD Gen 3 หรือ 5 · ความจุ 1TB", v2.describe(p["filters"]), "")
+
     mem = v2.memory(plan(filters={"ram_gb": 24}))
     check(R, "จำเงื่อนไขเฉพาะที่มีค่า (cookie เล็ก)", {"ram_gb": 24}, mem["filters"], "")
 

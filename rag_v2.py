@@ -72,6 +72,11 @@ def _gpu_family(gpu: str) -> str:
     return "integrated"
 
 
+def _gb(num: str, unit: str) -> int:
+    """ความจุเป็น GB: "512", "GB" -> 512 / "1", "TB" -> 1000 (ใช้หน่วยเดียวกันทั้งข้อมูลและคำถาม)"""
+    return round(float(num) * (1000 if unit.lower() == "tb" else 1))
+
+
 def catalog() -> list[dict]:
     global _catalog
     if _catalog is None:
@@ -81,11 +86,17 @@ def catalog() -> list[dict]:
             spec, bench = lp["spec"], lp["benchmark"]
             cs, gs = bench["CPU Score"], bench["GPU Score"]
             screen = re.match(r"([\d.]+)\s*inch", spec["DISPLAY"])
+            res = re.search(r"\((\d{3,4})\s*x\s*(\d{3,4})\)", spec["DISPLAY"])   # "16.0 inch (2560x1600) QHD+"
+            gen = re.search(r"gen\s*(\d)(?!\d)", spec["STORAGE"], re.I)            # "512 GB SSD PCIe M.2 Gen 4"
+            size = re.match(r"\s*(\d+(?:\.\d+)?)\s*(tb|gb)", spec["STORAGE"], re.I)
             rec = {
                 "name": lp["ชื่อสินค้า"], "brand": lp["ชื่อสินค้า"].split()[0], "series": _series(lp["ชื่อสินค้า"]),
                 "price": lp["ราคา"], "cpu": spec["CPU"], "gpu": spec["GPU"], "gpu_family": _gpu_family(spec["GPU"]),
                 "ram": spec["RAM"], "ram_gb": core._ram_gb(spec["RAM"]), "display": spec["DISPLAY"],
                 "screen": float(screen.group(1)) if screen else None, "storage": spec["STORAGE"], "os": spec["OS"],
+                "res_w": int(res.group(1)) if res else None, "res_h": int(res.group(2)) if res else None,
+                "ssd_gen": int(gen.group(1)) if gen else None,
+                "storage_gb": _gb(size.group(1), size.group(2)) if size else None,
                 "cpu_score": cs, "gpu_score": gs,
                 "cpu_level": core.score_level(cs, core.CPU_LEVELS), "gpu_level": core.score_level(gs, core.GPU_LEVELS),
                 "reviews": lp.get("reviews", []),
@@ -233,6 +244,9 @@ def normalize(raw: dict) -> dict:
             "brand": (str(f["brand"]).strip() or None) if f.get("brand") else None,
             "series": (str(f["series"]).strip() or None) if f.get("series") else None,
             "screen": _screen(f.get("screen")),
+            # ความละเอียดจอ / SSD / Windows: โค้ดอ่านจากคำถามเอง (spec_extras) ไม่รับจาก LLM
+            "res_w": None, "res_h": None, "res_min": None, "res_gt": None,
+            "ssd_gen": None, "storage_gb": None, "storage_min": None, "os": None,
         },
         "sort": None,
         "limit": _int(raw.get("limit")),
@@ -317,7 +331,8 @@ def _ground_usage(plan: dict, question: str, history: list, last_plan: dict | No
 
 
 _RE_ADVICE = re.compile(r"แนะนำ|ตัวไหนดี|รุ่นไหนดี|อันไหนดี|คุ้ม|เหมาะ|ควรซื้อ|ช่วยเลือก")
-SPEC_FILTERS = ("ram_gb", "ram_min", "gpu", "gpu_family", "cpu", "brand", "series", "screen")
+SPEC_FILTERS = ("ram_gb", "ram_min", "gpu", "gpu_family", "cpu", "brand", "series", "screen",
+                "res_w", "res_min", "res_gt", "ssd_gen", "storage_gb", "storage_min", "os")
 _RE_LIST_Q = re.compile(r"(?:รุ่น|ตัว|เครื่อง|อะไร|ไหน)\s*(?:ไหน|อะไร)?\s*บ้าง|ทุกรุ่น|ทุกตัว|ทั้งหมด")
 
 
@@ -371,13 +386,88 @@ UNSUPPORTED = (
         r"\d+\s*wh(?![a-z])|แบต\S*\s*(?:อยู่ได้|ใช้ได้)?\s*(?:นาน\s*)?\d+(?:\s*-\s*\d+)?\s*(?:ชั่วโมง|ชม)")),
     ("จอสัมผัส", re.compile(r"จอสัมผัส|จอทัช|ทัชสกรีน|touch\s*screen")),
 )
-SEARCHABLE = "ยี่ห้อ ซีรีส์ ราคา CPU การ์ดจอ แรม และขนาดจอ"
+SEARCHABLE = "ยี่ห้อ ซีรีส์ ราคา CPU การ์ดจอ แรม ขนาดจอ ความละเอียดจอ SSD และรุ่น Windows"
 
 
 def unsupported_terms(question: str) -> list[str]:
     """เรื่องที่ลูกค้าขอแต่ระบบยังคัดรุ่นให้ไม่ได้ (คืนชื่อเรื่องภาษาไทย ไม่ซ้ำ ตามลำดับในตาราง)"""
     q = question.lower()
     return [label for label, rx in UNSUPPORTED if rx.search(q)]
+
+
+# ความละเอียดจอ / SSD / Windows มีในข้อความสเปกอยู่แล้ว โค้ดอ่านเงื่อนไขจากคำถามเอง (ไม่ฝาก LLM)
+# รองรับแบบพื้นฐาน: ค่าตรงตัว, "ขึ้นไป/อย่างน้อย", "สูงกว่า/มากกว่า" — ไม่จำข้ามข้อความ
+RES_WORDS = (   # คำเรียกความละเอียด -> ความกว้างพิกเซลในข้อมูลร้าน
+    (re.compile(r"(?<![a-z\d.])4\s*k(?![a-z0-9])|(?<![a-z])uhd(?![a-z]|\s*graphics|\s*\d)|2160p"), 3840),
+    (re.compile(r"(?<![a-z\d.])(?:3|2\.8)\s*k(?![a-z0-9])"), 2880),
+    (re.compile(r"(?<![a-z\d.])(?:2|2\.5)\s*k(?![a-z0-9])|(?<![a-z])(?:qhd|wqxga)(?![a-z])|1440p|1600p"), 2560),
+    (re.compile(r"(?<![a-z])(?:fhd|full\s*hd|wuxga)(?![a-z])|1080p|1200p"), 1920),
+)
+_RE_ABOVE = re.compile(r"(?<!ไม่)(?:สูงกว่า|มากกว่า|เกินกว่า)")
+_RE_AT_LEAST = re.compile(r"ขึ้นไป|อย่างน้อย|ไม่ต่ำกว่า|เป็นต้นไป")
+_RE_SSD_WORD = re.compile(r"ssd|pcie|nvme|m\.2")
+_RE_STORAGE = (
+    re.compile(r"(\d+(?:\.\d+)?)\s*(tb)(?![a-z])"),
+    re.compile(r"(?:ssd|ความจุ|storage|hdd|ฮาร์ดดิส|ที่เก็บข้อมูล)\D{0,12}?(\d+)\s*(gb|tb|กิ๊ก)"),
+    re.compile(r"(?<!\d)(256|512)\s*(gb|กิ๊ก)"),
+)
+OS_WORDS = {"single language": "Windows 11 Home Single Language", "pro": "Windows Pro",
+            "windows 10": "Windows 10", "home": "Windows 11 Home", "windows": "Windows"}
+
+
+def _compare(q: str, start: int, end: int) -> str | None:
+    """คำเปรียบเทียบที่อยู่ติดกับค่าที่เจอ: "gt" = สูงกว่า, "min" = ขึ้นไป (ดูแค่รอบ ๆ ไม่ให้ "งบไม่เกิน" ปน)"""
+    near = q[max(0, start - 16):start] + " " + q[end:end + 14]
+    if _RE_ABOVE.search(near):
+        return "gt"
+    if _RE_AT_LEAST.search(near):
+        return "min"
+    return None
+
+
+def spec_extras(question: str) -> tuple[dict, list[str]]:
+    """อ่านเงื่อนไขความละเอียดจอ / SSD Gen / ความจุ / รุ่น Windows จากคำถาม
+    คืน (ค่าตัวกรอง, ชื่อเรื่องใน UNSUPPORTED ที่คัดได้แล้ว)"""
+    q, fl, covered = question.lower(), {}, []
+    m = re.search(r"(\d{4})\s*[x×]\s*(\d{3,4})", q)
+    width = int(m.group(1)) if m else None
+    if not m:
+        for rx, w in RES_WORDS:
+            m = rx.search(q)
+            if m:
+                width = w
+                break
+    if width:
+        how = _compare(q, m.start(), m.end())
+        if how == "gt":
+            fl["res_gt"] = width
+        elif how == "min":
+            fl["res_min"] = width
+        else:
+            fl["res_w"] = width
+            if m.re.pattern.startswith(r"(\d{4})"):
+                fl["res_h"] = int(m.group(2))
+        covered.append("ความละเอียดจอ")
+    if _RE_SSD_WORD.search(q):
+        gens = sorted({int(g) for g in re.findall(r"gen\s*(\d)(?!\d)", q)})
+        if gens:
+            g = re.search(r"gen\s*\d(?!\d)", q)
+            fl["ssd_gen"] = list(range(gens[0], 6)) if _compare(q, g.start(), g.end()) else gens
+            covered.append("Gen ของ SSD")
+    for rx in _RE_STORAGE:
+        m = rx.search(q)
+        if m:
+            gb = _gb(m.group(1), "tb" if m.group(2) == "tb" else "gb")
+            fl["storage_min" if _compare(q, m.start(), m.end()) else "storage_gb"] = gb
+            covered.append("ความจุ SSD")
+            break
+    if re.search(r"windows(?!\s*hello)|วินโดว์|(?<![a-z])win\s*1[01]|single\s*language", q):
+        fl["os"] = ("single language" if re.search(r"single\s*language", q) else
+                    "pro" if re.search(r"(?:windows|win)\s*(?:1[01]\s*)?pro(?![a-z])", q) else
+                    "windows 10" if re.search(r"(?:windows|win)\s*10", q) else
+                    "home" if "home" in q else "windows")
+        covered.append("รุ่นของ Windows")
+    return fl, covered
 
 
 def _thai_join(words: list[str]) -> str:
@@ -432,8 +522,18 @@ def understand(question: str, history: list, last_plan: dict | None, provider: d
     except (ValueError, json.JSONDecodeError) as e:
         err = f"อ่าน JSON ไม่ได้ ({e}) — ใช้ตัวอ่านตัวเลขเดิมแทน"
         plan = normalize({})
-    added = _safety_net(plan, question) + check_plan(plan, question, history, last_plan)
-    plan["unsupported"] = unsupported_terms(question)
+    added = _safety_net(plan, question)
+    extras, covered = spec_extras(question)
+    if extras:
+        plan["filters"].update(extras)
+        added.append("อ่านจากคำถาม: " + describe({**normalize({})["filters"], **extras}))
+        if plan["intent"] in ("general", "offtopic", "greeting", "overview"):
+            plan["intent"] = "list"   # "มีกี่รุ่นที่ใช้ SSD Gen 5" ต้องคัดรุ่น ไม่ใช่ภาพรวมร้าน
+        if plan["intent"] == "rank" and not plan["sort"]:
+            # LLM ไม่มีช่องให้ใส่ความละเอียด/SSD เลยเดาเป็น "จัดอันดับ 1 รุ่น" — ไม่มีเกณฑ์เรียง = ขอรายชื่อ
+            plan["intent"], plan["limit"] = "list", None
+    added += check_plan(plan, question, history, last_plan)
+    plan["unsupported"] = [t for t in unsupported_terms(question) if t not in covered]
     if plan["unsupported"]:
         added.append("ยังคัดตามเรื่องนี้ไม่ได้: " + ", ".join(plan["unsupported"]))
     if trace is not None:
@@ -491,7 +591,27 @@ def _match(lp: dict, fl: dict) -> bool:
         return False
     if fl["screen"] and not screen_ok(lp["screen"], fl["screen"]):
         return False
+    if fl.get("res_w") and lp["res_w"] != fl["res_w"]:
+        return False
+    if fl.get("res_h") and lp["res_h"] != fl["res_h"]:
+        return False
+    if fl.get("res_min") and (lp["res_w"] or 0) < fl["res_min"]:
+        return False
+    if fl.get("res_gt") and (lp["res_w"] or 0) <= fl["res_gt"]:
+        return False
+    if fl.get("ssd_gen") and lp["ssd_gen"] not in fl["ssd_gen"]:
+        return False
+    if fl.get("storage_gb") and lp["storage_gb"] != fl["storage_gb"]:
+        return False
+    if fl.get("storage_min") and (lp["storage_gb"] or 0) < fl["storage_min"]:
+        return False
+    if fl.get("os") and fl["os"] not in lp["os"].lower():
+        return False
     return True
+
+
+def _size(gb: int) -> str:
+    return f"{gb / 1000:g}TB" if gb >= 1000 else f"{gb}GB"
 
 
 def describe(fl: dict) -> str:
@@ -512,6 +632,21 @@ def describe(fl: dict) -> str:
         parts.append(f"แรม {fl['ram_min']}GB ขึ้นไป")
     if fl["screen"]:
         parts.append(f"จอ {fl['screen']:g} นิ้ว")
+    if fl.get("res_w"):
+        parts.append(f"ความละเอียดจอ {fl['res_w']}x{fl['res_h']}" if fl.get("res_h")
+                     else f"ความละเอียดจอแนวนอน {fl['res_w']} พิกเซล")
+    if fl.get("res_min"):
+        parts.append(f"ความละเอียดจอแนวนอน {fl['res_min']} พิกเซลขึ้นไป")
+    if fl.get("res_gt"):
+        parts.append(f"ความละเอียดจอแนวนอนมากกว่า {fl['res_gt']} พิกเซล")
+    if fl.get("ssd_gen"):
+        parts.append("SSD Gen " + " หรือ ".join(str(g) for g in fl["ssd_gen"]))
+    if fl.get("storage_gb"):
+        parts.append(f"ความจุ {_size(fl['storage_gb'])}")
+    if fl.get("storage_min"):
+        parts.append(f"ความจุ {_size(fl['storage_min'])} ขึ้นไป")
+    if fl.get("os"):
+        parts.append(OS_WORDS.get(fl["os"], fl["os"]))
     if fl["price_min"] and fl["price_max"]:
         parts.append(f"ราคา {fl['price_min']:,}–{fl['price_max']:,} บาท")
     elif fl["price_max"]:
@@ -701,8 +836,12 @@ def _spec_hint(plan: dict) -> str:
         bits.append("การ์ดจอ")
     if fl["cpu"]:
         bits.append("CPU")
-    if fl["screen"]:
+    if fl["screen"] or fl.get("res_w") or fl.get("res_min") or fl.get("res_gt"):
         bits.append("จอ")
+    if fl.get("ssd_gen") or fl.get("storage_gb") or fl.get("storage_min"):
+        bits.append("ความจุ")
+    if fl.get("os"):
+        bits.append("OS")
     return ", ".join(bits or ["CPU", "การ์ดจอ", "แรม"])
 
 
