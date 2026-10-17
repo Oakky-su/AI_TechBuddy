@@ -14,6 +14,7 @@
 """
 import json
 import re
+import threading
 import time
 
 import numpy as np
@@ -35,6 +36,7 @@ BRAND_CASE = {"macbook": "MacBook", "thinkpad": "ThinkPad", "alienware": "Alienw
 
 _catalog: list[dict] | None = None
 _doc_vecs: np.ndarray | None = None
+_doc_vecs_lock = threading.Lock()   # warmup ตอนแอปเริ่ม (app.py) กับคำถามที่เข้ามาระหว่างนั้นใช้ผลเดียวกัน ไม่ embed ซ้ำ
 
 
 def _core():
@@ -99,11 +101,13 @@ def catalog() -> list[dict]:
 
 
 def doc_vectors() -> np.ndarray:
-    """เวกเตอร์ของเอกสารรุ่นละ 1 ชิ้น (99 ชิ้น) — embed ครั้งแรกที่ใช้ แล้วเก็บไว้ในหน่วยความจำ"""
+    """เวกเตอร์ของเอกสารรุ่นละ 1 ชิ้น (99 ชิ้น) — embed ครั้งแรกที่ใช้ (หรือตอนแอปเริ่ม ดู WARMUP_EMBEDDINGS)
+    แล้วเก็บไว้ในหน่วยความจำ"""
     global _doc_vecs
-    if _doc_vecs is None:
-        docs = [lp["doc"] for lp in catalog()]
-        _doc_vecs = np.asarray(_core().get_embedder().encode(docs, normalize_embeddings=True, batch_size=16))
+    with _doc_vecs_lock:
+        if _doc_vecs is None:
+            docs = [lp["doc"] for lp in catalog()]
+            _doc_vecs = np.asarray(_core().get_embedder().encode(docs, normalize_embeddings=True, batch_size=16))
     return _doc_vecs
 
 

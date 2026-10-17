@@ -63,15 +63,19 @@ INTERNAL_TOKEN = os.getenv("INTERNAL_TOKEN", "")
 
 # cache โมเดลและ collection ไว้ใน memory ป้องกันการโหลดซ้ำทุก request
 _embedder: SentenceTransformer = None
+_embedder_lock = threading.Lock()
 _collection = None
 _summary_doc: str | None = None
 
 
 def get_embedder():
     # โหลด bge-m3 ครั้งแรกแล้ว cache ไว้ (โหลดช้า + กินแรม ~2GB)
+    # lock: คำถามที่เข้ามาระหว่าง warmup กำลังโหลด ต้องรอตัวเดียวกัน ไม่โหลดซ้ำอีกก้อน
     global _embedder
     if _embedder is None:
-        _embedder = SentenceTransformer(EMBED_MODEL)
+        with _embedder_lock:
+            if _embedder is None:
+                _embedder = SentenceTransformer(EMBED_MODEL)
     return _embedder
 
 
@@ -82,6 +86,43 @@ def get_collection():
         client = chromadb.PersistentClient(path=str(CHROMA_DIR))
         _collection = client.get_collection(COLLECTION_NAME)
     return _collection
+
+
+# ---- โหลดโมเดล embedding ล่วงหน้าตอนแอปเริ่ม ----
+# คำถามแรกหลังรีสตาร์ตที่ต้องเรียงตามการใช้งาน (เช่น "เล่นเกม งบ 30000") ต้องโหลด bge-m3 (~2GB)
+# แล้ว embed เอกสารทั้ง 99 รุ่นก่อน บนเว็บจริงเคยรวมกันเกิน 100 วินาที -> Cloudflare ตัดเป็น 524
+# จึงเริ่มโหลดใน thread พื้นหลังทันทีที่แอปขึ้น เซิร์ฟเวอร์เปิดรับคำถามได้เลยไม่ต้องรอ
+# false = โหลดตอนมีคำถามแรกแบบเดิม (เช่น เครื่องแรมน้อยที่ไม่อยากโหลดโมเดลจนกว่าจะมีคนใช้)
+WARMUP_EMBEDDINGS = os.getenv("WARMUP_EMBEDDINGS", "true").lower() == "true"
+
+
+def warmup_embeddings() -> bool:
+    """โหลดโมเดล embedding (+ เวกเตอร์ 99 รุ่นของ v2) ไว้ก่อนมีคำถาม คืน True ถ้าสำเร็จ
+    พังก็แค่ log แล้วจบ แอปทำงานต่อตามปกติ แค่คำถามแรกจะกลับไปโหลดเองแบบเดิม"""
+    started = time.perf_counter()
+    print(f"[warmup] กำลังโหลดโมเดล embedding ล่วงหน้า (RAG_PIPELINE={RAG_PIPELINE}) "
+          "— ระหว่างนี้แอปรับคำถามได้ตามปกติ", flush=True)
+    try:
+        if RAG_PIPELINE == "v2":
+            rag_v2.doc_vectors()   # โหลด bge-m3 + embed เอกสาร 99 รุ่นที่ใช้เรียงตามการใช้งาน
+        else:
+            get_collection()       # v1 ค้นจาก Chroma
+            get_embedder().encode(["warmup"], normalize_embeddings=True)
+    except Exception as e:
+        print(f"[warmup] โหลดล่วงหน้าไม่สำเร็จ ({type(e).__name__}: {e}) "
+              "— แอปทำงานต่อ จะโหลดตอนมีคำถามแรกแทน", flush=True)
+        return False
+    print(f"[warmup] โมเดล embedding พร้อมแล้ว ใช้เวลา {time.perf_counter() - started:.1f} วินาที", flush=True)
+    return True
+
+
+def start_warmup() -> threading.Thread | None:
+    """เริ่ม warmup_embeddings ใน thread พื้นหลัง (daemon = ไม่ค้างตอนปิดแอป) — ปิดไว้ใน .env คืน None"""
+    if not WARMUP_EMBEDDINGS:
+        return None
+    thread = threading.Thread(target=warmup_embeddings, name="warmup-embeddings", daemon=True)
+    thread.start()
+    return thread
 
 
 # ---- จำกัดจำนวนคำขอต่อ IP ----
@@ -1964,6 +2005,11 @@ def restore():
                 break
 
     return jsonify({"ok": True, "restored": len(clean)})
+
+
+# เริ่มโหลดโมเดลล่วงหน้าตอน gunicorn import แอป — วางท้ายไฟล์ให้ทุกฟังก์ชัน/ค่าตั้งพร้อมก่อน thread เริ่ม
+# (ถ้าวันหนึ่งใช้ gunicorn --preload ต้องย้ายไปเรียกใน hook post_fork แทน ไม่งั้น thread อยู่แต่ใน master)
+start_warmup()
 
 
 if __name__ == "__main__":

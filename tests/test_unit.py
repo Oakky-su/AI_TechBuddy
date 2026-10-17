@@ -19,6 +19,9 @@ if "chromadb" not in sys.modules:
 
 import os  # noqa: E402
 
+# ไม่ต้องโหลดโมเดล embedding ล่วงหน้าตอน import แอป (test_warmup เรียกเองโดยใช้ตัวปลอม)
+os.environ["WARMUP_EMBEDDINGS"] = "false"
+
 import app  # noqa: E402
 import llm_providers as llm  # noqa: E402
 from app import extract_budget, strip_think  # noqa: E402
@@ -517,6 +520,114 @@ def test_debug():
 
 
 # ─────────────────────────────────────────────────────────────
+# 8.5 โหลดโมเดล embedding ล่วงหน้าตอนแอปเริ่ม (WARMUP_EMBEDDINGS)
+#     คำถามแรกหลังรีสตาร์ตไม่ต้องรอโหลด bge-m3 + embed 99 รุ่นเอง (เคยนานจน Cloudflare ตัดเป็น 524)
+#     ใช้โมเดลปลอมทั้งหมด -> รันได้ทั้งบนเครื่อง host และใน container โดยไม่โหลดโมเดลจริง
+# ─────────────────────────────────────────────────────────────
+def test_warmup():
+    import contextlib
+    import io
+    import threading
+    import time
+
+    import numpy as np
+    import rag_v2
+
+    W = "warmup"
+    check(W, "ปิดได้ด้วย WARMUP_EMBEDDINGS=false (ชุดเทสต์ตั้งไว้)", False, app.WARMUP_EMBEDDINGS, "")
+    saved = {k: getattr(app, k) for k in ("RAG_PIPELINE", "WARMUP_EMBEDDINGS", "_embedder",
+                                          "SentenceTransformer", "get_embedder", "get_collection")}
+    saved_v2 = {k: getattr(rag_v2, k) for k in ("doc_vectors", "_doc_vecs")}
+    calls, built = [], []
+
+    class FakeModel:
+        def __init__(self, name=None):
+            built.append(name)
+            time.sleep(0.1)   # โหลดช้าพอให้ thread อื่นเข้ามาซ้อน
+
+        def encode(self, texts, **kw):
+            calls.append(("encode", len(texts)))
+            time.sleep(0.05)
+            return np.zeros((len(texts), 4))
+
+    def warmup(**patch) -> tuple[bool, str]:
+        for k, v in patch.items():
+            setattr(app, k, v)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            ok = app.warmup_embeddings()
+        return ok, out.getvalue()
+
+    def together(fn, n=4) -> list:
+        got = []
+        threads = [threading.Thread(target=lambda: got.append(fn())) for _ in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(5)
+        return got
+
+    try:
+        collection = lambda: calls.append("collection")
+        rag_v2.doc_vectors = lambda: calls.append("doc_vectors")
+        ok, log = warmup(RAG_PIPELINE="v2", get_collection=collection)
+        check(W, "v2 = เตรียมเวกเตอร์ 99 รุ่น (โหลดโมเดลในตัว) + log ว่าพร้อม", (True, ["doc_vectors"], True),
+              (ok, list(calls), "พร้อมแล้ว" in log), log)
+
+        calls.clear()
+        model = FakeModel()
+        ok, log = warmup(RAG_PIPELINE="v1", get_collection=collection, get_embedder=lambda: model)
+        check(W, "v1 = เปิด Chroma + โหลดโมเดล ไม่แตะ doc_vectors", (True, ["collection", ("encode", 1)]),
+              (ok, list(calls)), log)
+
+        def broken():
+            raise RuntimeError("ไม่มีไฟล์โมเดล")
+        rag_v2.doc_vectors = broken
+        try:
+            ok, log = warmup(RAG_PIPELINE="v2")
+            check(W, "โหลดพัง = log สาเหตุแล้วไปต่อ (คืน False)", (False, True), (ok, "ไม่มีไฟล์โมเดล" in log), log)
+        except Exception as e:
+            check(W, "โหลดพัง = log สาเหตุแล้วไปต่อ (คืน False)", "ไม่โยน exception", repr(e), "")
+
+        calls.clear()
+        rag_v2.doc_vectors = lambda: calls.append("doc_vectors")
+        app.WARMUP_EMBEDDINGS = False
+        check(W, "ปิดไว้ = ไม่เริ่ม thread ไม่โหลดอะไร", (None, []), (app.start_warmup(), list(calls)), "")
+
+        # เปิดไว้ = โหลดใน thread พื้นหลัง: start_warmup คืนทันทีทั้งที่การโหลดยังไม่จบ
+        gate = threading.Event()
+        rag_v2.doc_vectors = lambda: gate.wait(5)
+        app.WARMUP_EMBEDDINGS = True
+        with contextlib.redirect_stdout(io.StringIO()):
+            t0 = time.perf_counter()
+            thread = app.start_warmup()
+            returned = time.perf_counter() - t0
+            alive = thread is not None and thread.is_alive()
+            gate.set()
+            if thread is not None:
+                thread.join(5)
+        check(W, "เปิดไว้ = thread daemon ไม่บล็อกการเปิดเซิร์ฟเวอร์", (True, True, True),
+              (alive, thread is not None and thread.daemon, returned < 1), f"{returned:.2f}s")
+
+        # คำถามที่เข้ามาตอน warmup กำลังโหลด ต้องรอผลเดียวกัน ไม่โหลดโมเดล/embed 99 รุ่นซ้ำอีกรอบ
+        app.get_embedder, app.SentenceTransformer, app._embedder = saved["get_embedder"], FakeModel, None
+        built.clear()
+        got = together(app.get_embedder)
+        check(W, "get_embedder พร้อมกัน 4 thread = สร้างโมเดลครั้งเดียว", (1, 4, 1),
+              (len(built), len(got), len({id(m) for m in got})), "")
+        calls.clear()
+        rag_v2.doc_vectors, rag_v2._doc_vecs = saved_v2["doc_vectors"], None
+        got = together(rag_v2.doc_vectors)
+        check(W, "doc_vectors พร้อมกัน 4 thread = embed 99 รุ่นครั้งเดียว", ([("encode", len(rag_v2.catalog()))], 4, True),
+              (list(calls), len(got), all(v is got[0] for v in got)), "")
+    finally:
+        for k, v in saved.items():
+            setattr(app, k, v)
+        for k, v in saved_v2.items():
+            setattr(rag_v2, k, v)
+
+
+# ─────────────────────────────────────────────────────────────
 # 9. RAG รุ่น 2 (rag_v2.py) — ตีความเป็นเงื่อนไข -> กรอง/เรียงจากข้อมูลจริง (ส่วนที่ไม่ต้องเรียก LLM)
 # ─────────────────────────────────────────────────────────────
 def test_rag_v2():
@@ -676,6 +787,7 @@ if __name__ == "__main__":
     test_tools()
     test_stream()
     test_debug()
+    test_warmup()
     test_rag_v2()
 
     print(f"\n{'='*78}\nUNIT TESTS: ผ่าน {len(PASS)} / {len(PASS)+len(FAIL)}\n{'='*78}")
