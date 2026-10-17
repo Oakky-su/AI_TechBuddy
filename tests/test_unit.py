@@ -173,8 +173,8 @@ def test_data():
 # ─────────────────────────────────────────────────────────────
 # 5. llm_providers — รายการ AI ที่สลับได้จากหน้าเว็บ
 # ─────────────────────────────────────────────────────────────
-KEY_VARS = ("BMS_LLM_API_KEY", "THAILLM_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-            "GEMINI_API_KEY", "BMS_LLM_BASE_URL", "DEFAULT_PROVIDER", "DEFAULT_ENGINE",
+KEY_VARS = ("THAILLM_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+            "GEMINI_API_KEY", "OLLAMA_BASE_URL", "DEFAULT_PROVIDER", "DEFAULT_ENGINE",
             "VISIBLE_PROVIDERS", "OLLAMA_API_KEY", "ALLOWED_ENGINES")
 
 
@@ -182,13 +182,14 @@ def test_providers():
     saved = {k: os.environ.pop(k, None) for k in KEY_VARS}
     try:
         by_id = {p["id"]: p for p in llm.load_providers()}
-        check("providers", "Wave AI ใช้ได้โดยไม่ต้องมี key", True, by_id["wave-ai"]["available"], "")
+        check("providers", "Ollama ไม่มี key = ใช้ไม่ได้", False, by_id["ollama-gemma4"]["available"], "")
         check("providers", "ThaiLLM ไม่มี key = ใช้ไม่ได้", False, by_id["thaillm"]["available"], "")
         check("providers", "Claude ไม่มี key = ใช้ไม่ได้", False, by_id["claude-sonnet"]["available"], "")
         check("providers", "pi-builtin ใช้ได้เฉพาะโหมด pi", ["pi"], by_id["claude-sonnet"]["engines"], "")
         check("providers", "openai-compatible ใช้ได้ทั้ง 2 โหมด", ["pi", "classic"],
-              by_id["wave-ai"]["engines"], "")
-        check("providers", "ไม่ตั้ง DEFAULT_PROVIDER -> ตัวแรกที่ใช้ได้", "wave-ai",
+              by_id["ollama-gemma4"]["engines"], "")
+        os.environ["OLLAMA_API_KEY"] = "test-ollama-key"
+        check("providers", "ไม่ตั้ง DEFAULT_PROVIDER -> ตัวแรกที่ใช้ได้", "ollama-gemma4",
               llm.public_list()["default_provider"], "")
 
         _, _, err = llm.pick("thaillm", "classic")
@@ -206,23 +207,23 @@ def test_providers():
         check("providers", "config ที่ส่ง pi-agent มี key", "sk-test-secret",
               llm.agent_config(provider).get("api_key"), "")
 
-        os.environ["BMS_LLM_BASE_URL"] = "http://example.test/v1/"
-        bms = next(p for p in llm.load_providers() if p["id"] == "wave-ai")
-        check("providers", "env ทับ base_url + ตัด / ท้าย", "http://example.test/v1", bms["base_url"], "")
+        os.environ["OLLAMA_BASE_URL"] = "http://example.test/v1/"
+        ollama = next(p for p in llm.load_providers() if p["id"] == "ollama-gemma4")
+        check("providers", "env ทับ base_url + ตัด / ท้าย", "http://example.test/v1", ollama["base_url"], "")
 
-        os.environ["VISIBLE_PROVIDERS"] = "wave-ai"
+        os.environ["VISIBLE_PROVIDERS"] = "ollama-gemma4"
         listed = [p["id"] for p in llm.public_list()["providers"]]
-        check("providers", "VISIBLE_PROVIDERS ซ่อนตัวอื่นจากเมนู", ["wave-ai"], listed, "")
+        check("providers", "VISIBLE_PROVIDERS ซ่อนตัวอื่นจากเมนู", ["ollama-gemma4"], listed, "")
         _, _, err = llm.pick("claude-sonnet", "pi")
         check("providers", "ตัวที่ซ่อนเรียกผ่าน /chat ไม่ได้", True, bool(err) and "ไม่ได้เปิดให้ใช้" in err, "")
         os.environ.pop("VISIBLE_PROVIDERS")
 
         os.environ["ALLOWED_ENGINES"] = "classic"
         lst = llm.public_list()
-        wave = next(p for p in lst["providers"] if p["id"] == "wave-ai")
+        ollama = next(p for p in lst["providers"] if p["id"] == "ollama-gemma4")
         check("engines", "ALLOWED_ENGINES=classic -> เหลือโหมดเดียว", (["classic"], ["classic"], "classic"),
-              (lst["engines"], wave["engines"], lst["default_engine"]), "")
-        _, engine, err = llm.pick("wave-ai", "pi")
+              (lst["engines"], ollama["engines"], lst["default_engine"]), "")
+        _, engine, err = llm.pick("ollama-gemma4", "pi")
         check("engines", "ขอ pi ตอนปิดไว้ -> ใช้ classic แทนเงียบ ๆ", ("classic", None), (engine, err), "")
         os.environ["ANTHROPIC_API_KEY"] = "sk-test"
         claude = next(p for p in llm.load_providers() if p["id"] == "claude-sonnet")
@@ -452,6 +453,8 @@ def test_stream():
 def test_debug():
     D = "debug"
     saved = app.DEBUG_PANEL
+    saved_key = os.environ.get("OLLAMA_API_KEY")
+    os.environ.setdefault("OLLAMA_API_KEY", "test-ollama-key")   # ให้มี AI ที่เลือกได้ (ไม่ได้เรียกจริง)
     client = app.app.test_client()
     try:
         # ผู้ดูแลปิดไว้ = ไม่สนค่า debug ที่หน้าเว็บส่งมา (กันคนนอกขอดู prompt ทั้งก้อน)
@@ -475,6 +478,10 @@ def test_debug():
             check(D, f"/providers บอกสถานะ debug={on}", on, client.get("/providers").get_json().get("debug"), "")
     finally:
         app.DEBUG_PANEL = saved
+        if saved_key is None:
+            os.environ.pop("OLLAMA_API_KEY", None)
+        else:
+            os.environ["OLLAMA_API_KEY"] = saved_key
 
     # ความคิดของโมเดลมาได้ทั้งฟิลด์ reasoning และบล็อก <think> (รวมบล็อกที่ token หมดก่อนปิด)
     info = app.llm_trace({"choices": [{"message": {"content": "<think>คิดก่อน</think>ตอบ<think>ค้าง",

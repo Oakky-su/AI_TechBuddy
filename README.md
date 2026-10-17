@@ -3,7 +3,11 @@
 > **"เพื่อนที่รู้เรื่องโน้ตบุ๊ค"** — RAG Chatbot ภาษาไทยที่แนะนำโน้ตบุ๊คจากสินค้าจริง 99 รุ่นในร้าน
 > ตรงไปตรงมา ไม่เชียร์ขาย และไม่แต่งตัวเลขขึ้นเอง
 
-ผู้ใช้พิมพ์ว่า *"โน้ตบุ๊คเล่นเกม งบ 25,000"* แล้วได้คำแนะนำ 1 รุ่น พร้อมเหตุผล สเปก
+**ระบบที่ใช้งานเป็น RAG ไม่ใช่ agentic RAG** — ทุกคำถามทำตามขั้นตอนเดิม เรียก AI ไม่เกิน 2 ครั้ง
+(แปลงคำถามเป็นเงื่อนไข → โค้ดคัดรุ่นจากข้อมูลจริง → เขียนคำตอบ) AI ไม่ได้ตัดสินใจค้นเพิ่มหรือเรียกเครื่องมือเอง
+โค้ดโหมด agent (`pi-agent/`) ยังอยู่ใน repo จากรอบทดลอง แต่ปิดไว้ และ `docker compose up` ปกติจะไม่ build หรือเปิดมัน
+
+ผู้ใช้พิมพ์ว่า *"โน้ตบุ๊คเล่นเกม งบ 25,000"* แล้วได้รุ่นที่แนะนำ พร้อมเหตุผล สเปก
 คะแนนเบนช์มาร์กที่แปลเป็นภาษาคน ข้อดี และข้อเสียจากรีวิวผู้ใช้จริง
 
 ---
@@ -12,7 +16,8 @@
 
 - **RAG v2: AI แปลงคำถามเป็นเงื่อนไขก่อนค้น (self-query)** — ขั้นแรก AI อ่านคำถาม + บทสนทนาก่อนหน้า
   แล้วตอบเป็น JSON ว่าลูกค้าถามอะไร (ขอรายชื่อ / จัดอันดับ / แนะนำ / เทียบรุ่น / ถามสเปก / นอกเรื่อง) และเงื่อนไข
-  (งบ แรม การ์ดจอ CPU ยี่ห้อ ขนาดจอ เรียงตาม) จากนั้นโค้ดคัดจากข้อมูลจริงครบทั้ง 99 รุ่น แล้วจึงให้ AI เรียบเรียงคำตอบ
+  (งบ แรม การ์ดจอ CPU ยี่ห้อ ขนาดจอ เรียงตาม — ส่วนความละเอียดจอ SSD และรุ่น Windows โค้ดอ่านจากคำถามเอง)
+  จากนั้นโค้ดคัดจากข้อมูลจริงครบทั้ง 99 รุ่น แล้วจึงให้ AI เรียบเรียงคำตอบ
   — นับครบ ไม่หลุดรุ่น จำเงื่อนไขข้ามข้อความได้ ดูขั้นตอนคิดได้ที่ปุ่ม "กระบวนการคิด" ใต้คำตอบ (`rag_v2.py`)
 - **RAG v1 (สลับกลับได้ที่ `RAG_PIPELINE=v1`)** — ค้นเอกสารสเปก 6 ชิ้น + รีวิว 3 ชิ้น แยกกัน (ปรับได้ใน `.env`) แล้วแนบภาพรวมร้านทุกครั้ง
   เพื่อการันตีว่า AI เห็นราคาและสเปกเสมอ (ฐานข้อมูลมีรีวิวมากกว่าสเปก 3 เท่า ถ้าค้นรวมจะได้แต่รีวิว)
@@ -25,9 +30,10 @@
 - **ส่วนต่างงบคำนวณด้วยโค้ด** — ไม่ปล่อยให้ LLM บวกลบเลขเอง เพราะพลาดได้
 - **รูปแบบคำตอบคงที่** — เหตุผล (CPU/GPU/RAM/STORAGE/ราคา) → สรุปเบนช์มาร์ก → ข้อดี → ข้อเสีย
 - **หน้าเว็บธีมแดง** — โหมดสว่าง/มืด, เรนเดอร์ Markdown, ประวัติแชทพร้อมปุ่มลบ
-- **เปลี่ยน AI ได้จากหน้าเว็บ** — เมนูมุมบนเลือกโมเดล (รายการอยู่ใน `providers.json`) และสวิตช์
-  โหมด Pi Agent / RAG แบบเดิม ใต้คำตอบทุกข้อบอกว่าโมเดลไหนตอบ ค้นเพิ่มกี่ครั้ง ใช้เวลาเท่าไหร่
-- **Pi Agent ([pi.dev](https://pi.dev))** (ปิดอยู่ — ตอนนี้ใช้ RAG อย่างเดียว เปิดได้ที่ `ALLOWED_ENGINES`)
+- **เปลี่ยน AI ได้ใน `.env`** — `DEFAULT_PROVIDER` / `VISIBLE_PROVIDERS` (รายการอยู่ใน `providers.json`)
+  ถ้าเปิดให้เลือกหลายตัว หน้าเว็บจะมีเมนูมุมบน ใต้คำตอบทุกข้อบอกว่าโมเดลไหนตอบ ใช้เวลาเท่าไหร่
+- **โหมด Pi Agent ([pi.dev](https://pi.dev)) — ปิดอยู่ ไม่ได้ใช้งาน** ของทดลองแบบ agentic เก็บโค้ดไว้เผื่อทดลองต่อ
+  ต้องเปิดเองทั้ง 2 ที่: ตั้ง `ALLOWED_ENGINES=` (ว่าง) ใน `.env` และสั่ง `docker compose --profile agent up -d --build`
   — ใช้ agent loop ของ pi (`@earendil-works/pi-agent-core`)
   ให้ AI เรียก tool ค้นข้อมูลเพิ่มเองได้หลายรอบ (กรองตามสเปก / ค้นรีวิว / ดูรายละเอียดรุ่น)
   โดยเริ่มจากข้อมูลชุดเดียวกับโหมด RAG เสมอ คำตอบจึงไม่แย่กว่าเดิม แต่ตอบคำถามแบบ
@@ -42,16 +48,18 @@
 | Web | Flask 3.0 + Gunicorn |
 | Embedding | `BAAI/bge-m3` (หลายภาษา, 1024 มิติ) |
 | Vector DB | ChromaDB (Persistent) |
-| LLM | เลือกได้: Wave AI · Gemma 4 31B (ค่าเริ่มต้น) / OpenThaiGPT 8B (ThaiLLM) / Claude / GPT / Gemini |
-| Agent | pi (`@earendil-works/pi-agent-core` + `pi-ai` 1.2) บน Node 22 — service `pi-agent` |
+| LLM | เลือกได้: Ollama Cloud · Gemma 4 31B (ค่าเริ่มต้น) / OpenThaiGPT 8B (ThaiLLM) / Claude / GPT / Gemini (3 ตัวหลังใช้ได้เฉพาะโหมด agent) |
+| Agent (ปิดอยู่) | pi (`@earendil-works/pi-agent-core` + `pi-ai` 1.2) บน Node 22 — service `pi-agent` เปิดเฉพาะ `--profile agent` |
 | Frontend | HTML + Vanilla JS + CSS |
-| Container | Docker + Docker Compose (2 service: `teddy`, `pi-agent`) |
+| Container | Docker + Docker Compose — ใช้งานจริงมี service เดียวคือ `teddy` (`pi-agent` เปิดเฉพาะ `--profile agent`) |
 
 ```
-เบราว์เซอร์ ──/chat──▶ teddy (Flask) ── ค้น Chroma รอบแรก ──┬─ classic ──▶ LLM ──▶ คำตอบ
-                                                            └─ pi ──▶ pi-agent ──▶ LLM
-                                                                         │  ▲
-                                         teddy /internal/tools ◀── tool ─┘  │ วนจนได้คำตอบ
+เบราว์เซอร์ ──/chat──▶ teddy (Flask)
+   ① LLM แปลงคำถามเป็นเงื่อนไข (JSON)
+   ② โค้ดตรวจเงื่อนไข แล้วคัด/เรียงรุ่นจาก laptops.json ครบ 99 รุ่น (+ bge-m3 จัดลำดับตามการใช้งาน)
+   ③ LLM เขียนคำตอบจากรุ่นที่คัดมา ──▶ คำตอบ (ทยอยขึ้นจอ)
+
+โหมด agent (ปิดอยู่): teddy ──▶ pi-agent ──▶ LLM ⇄ teddy /internal/tools วนหลายรอบ
 ```
 
 ---
@@ -61,12 +69,13 @@
 ค่าตั้งทุกอย่าง (API key, วิธีค้น, โหมด, หน้าเว็บ) อยู่ใน `.env` ไฟล์เดียว ไม่ต้องแก้โค้ด
 
 1. `cp .env.example .env`
-2. เปิด `.env` ใส่ `OLLAMA_API_KEY` (หรือ key ของ AI ตัวอื่นในหัวข้อ 1) และตั้ง `SECRET_KEY`, `INTERNAL_TOKEN` เป็นค่าสุ่ม
-3. `docker compose up --build` แล้วเปิด http://localhost:5000
+2. เปิด `.env` ใส่ `OLLAMA_API_KEY` (หรือ key ของ AI ตัวอื่นในหัวข้อ 1) และตั้ง `SECRET_KEY` เป็นค่าสุ่ม
+   (`INTERNAL_TOKEN` ใช้เฉพาะโหมด agent)
+3. `docker compose up -d --build` แล้วเปิด http://localhost:5000 — build แค่ `teddy` ไม่ต้องใช้ pi-agent
 
 แก้ `.env` ทีหลัง สั่ง `docker compose up -d` ให้แอปรับค่าใหม่ (ไม่ต้อง build ใหม่)
 
-> ครั้งแรกใช้เวลานาน เพราะต้องโหลดโมเดล bge-m3 (~2 GB) และสร้าง vector index ตอน build
+> ครั้งแรกใช้เวลานาน (ประมาณ 5–15 นาที) เพราะต้องโหลดโมเดล bge-m3 (~2 GB) และสร้าง vector index ตอน build
 
 ### เลือกวิธีค้น (ทางเลือก RAG)
 
@@ -76,7 +85,7 @@
 | RAG ค้นตามความหมายอย่างเดียว | `RAG_PIPELINE=v1` `HYBRID_FILTERS=false` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
 | RAG ดึงสเปกเยอะขึ้น ไม่ดึงรีวิว | `RAG_PIPELINE=v1` `HYBRID_FILTERS=false` `TOP_K_SPEC=15` `TOP_K_REVIEW=0` |
 | RAG + กฎกรองตัวเลข | `RAG_PIPELINE=v1` `HYBRID_FILTERS=true` `TOP_K_SPEC=6` `TOP_K_REVIEW=3` |
-| Agentic RAG (AI เรียกเครื่องมือค้นเพิ่มเอง) | `ALLOWED_ENGINES=` ว่าง + `DEFAULT_ENGINE=pi` |
+| Agentic RAG (ทดลอง ปิดอยู่ — AI เรียกเครื่องมือค้นเพิ่มเอง) | `ALLOWED_ENGINES=` ว่าง + `DEFAULT_ENGINE=pi` และสั่ง `docker compose --profile agent up -d --build` |
 
 ผลทดสอบของแต่ละทางเลือกอยู่ในเอกสาร "ข้อจำกัดของ RAG" — วัดซ้ำได้ด้วย `tests/test_question_types.py`
 
@@ -213,8 +222,6 @@ docker exec ai_teddy-teddy-1 python /app/test_retrieval.py
 | `ALLOWED_ENGINES` | `classic` | โหมดที่เปิดให้ใช้ — `classic` = RAG อย่างเดียว หน้าเว็บไม่มีปุ่มสลับโหมด / ว่าง = ทั้งสองโหมด (ต้องมี service `pi-agent`) |
 | `RATE_LIMIT_PER_MIN` | `1000` (พัฒนา) | ข้อความต่อนาทีต่อคน — เปิดผ่าน tunnel ใช้ `PUBLIC_RATE_LIMIT_PER_MIN` (ค่าเริ่มต้น 20) |
 | `DEBUG_PANEL` | `false` | `true` = ทุกคำตอบมีปุ่ม "กระบวนการคิด" เปิดแผงด้านขวาที่โชว์ว่าคำตอบนั้นคิดยังไง (ดูหัวข้อโหมด Debug) — ทุกคนที่เข้าเว็บกดดูได้รวม prompt ทั้งก้อน ปิดก่อนเปิดให้คนทั่วไปใช้ |
-| `BMS_LLM_BASE_URL` | `https://qwen-llm.bmscloud.in.th/v1` | endpoint LLM ของเรา |
-| `BMS_LLM_MODEL` | `gemma-4-31b` | ชื่อโมเดลบน endpoint นั้น |
 | `THAILLM_API_KEY` | — | ใส่แล้วตัวเลือก ThaiLLM จะใช้ได้ |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GEMINI_API_KEY` | — | ใส่แล้วตัวเลือกนั้นจะใช้ได้ (โหมด Pi Agent) |
 | `DISABLE_THINKING` | `false` | `true` = ThaiLLM ตอบเร็วและนิ่งขึ้น แต่คุณภาพลด |

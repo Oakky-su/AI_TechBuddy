@@ -8,20 +8,6 @@
   ],
   "providers": [
     {
-      "id": "wave-ai",
-      "label": "Wave AI · Gemma 4 31B",
-      "short": "Wave AI",
-      "kind": "openai-compatible",
-      "base_url": "https://qwen-llm.bmscloud.in.th/v1",
-      "base_url_env": "BMS_LLM_BASE_URL",
-      "model": "gemma-4-31b",
-      "model_env": "BMS_LLM_MODEL",
-      "api_key_env": "BMS_LLM_API_KEY",
-      "key_required": false,
-      "context_window": 65536,
-      "max_tokens": 3072
-    },
-    {
       "id": "thaillm",
       "label": "ThaiLLM · OpenThaiGPT 8B",
       "short": "OpenThaiGPT 8B",

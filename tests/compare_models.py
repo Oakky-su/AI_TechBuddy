@@ -1,7 +1,7 @@
 # เทียบ AI หลายตัวด้วยคำถามชุดเดียวกัน — ใช้ตอบคำถาม "ถ้าเปลี่ยนจาก 31B เป็น 8B จะไหวไหม"
 # รัน (ในคอนเทนเนอร์ teddy):
 #   python tests/compare_models.py                      # ทุก AI ที่ใช้ได้ × 2 โหมด
-#   python tests/compare_models.py wave-ai thaillm      # เลือกเฉพาะ id ใน providers.json
+#   python tests/compare_models.py ollama-gemma4 thaillm      # เลือกเฉพาะ id ใน providers.json
 # ผลละเอียดทุกคำตอบเขียนไว้ที่ tests/compare_models.json
 #
 # ตรวจอัตโนมัติต่อคำถาม (ไม่ได้วัด "ความสละสลวย" — อันนั้นต้องอ่านเอง):

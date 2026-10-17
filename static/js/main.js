@@ -101,7 +101,7 @@ const BOT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
   stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/>
   <path d="M2 20h20"/></svg>`;
 
-/* "Wave AI · ค้นละเอียด · ค้นเพิ่ม 2 ครั้ง · 3.4 วิ" — บอกว่าคำตอบนี้มาจาก AI ตัวไหน โหมดไหน */
+/* "Gemma 4 31B (Ollama) · ค้นละเอียด · ค้นเพิ่ม 2 ครั้ง · 3.4 วิ" — บอกว่าคำตอบนี้มาจาก AI ตัวไหน โหมดไหน */
 function metaText(meta) {
   const showMode = serverEngines.length > 1;   // โหมดเดียว = ไม่ต้องบอกชื่อโหมด
   const parts = [meta.provider_label, showMode ? ENGINE_NAME[meta.engine] || meta.engine : null];

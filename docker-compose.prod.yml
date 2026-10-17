@@ -32,8 +32,6 @@ services:
       # จำกัดจำนวนข้อความต่อนาทีต่อ IP กันคนเดียวกินโควตา LLM หมด
       - RATE_LIMIT_PER_MIN=${RATE_LIMIT_PER_MIN:-10}
     command: gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 16 --timeout 180 app:app
-    depends_on:
-      - pi-agent
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:5000/')\""]
       interval: 60s
@@ -41,7 +39,9 @@ services:
       start_period: 180s
       retries: 3
 
+  # โหมด agent (ปิดอยู่) — เปิดเฉพาะเมื่อสั่ง --profile agent ดู docker-compose.yml
   pi-agent:
+    profiles: ["agent"]
     build: ./pi-agent
     restart: unless-stopped
     environment:

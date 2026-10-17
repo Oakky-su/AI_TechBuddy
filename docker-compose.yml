@@ -3,7 +3,7 @@ services:
     build: .
     ports:
       - "5000:5000"
-    # API key ของ AI แต่ละเจ้า (BMS_LLM_*, OPENAI_API_KEY, ANTHROPIC_API_KEY ...) อ่านจาก .env ทั้งไฟล์
+    # API key ของ AI แต่ละเจ้า (OLLAMA_API_KEY, THAILLM_API_KEY, OPENAI_API_KEY ...) อ่านจาก .env ทั้งไฟล์
     # จะได้เพิ่ม provider ใน providers.json ได้โดยไม่ต้องมาแก้ไฟล์นี้ทุกครั้ง
     env_file:
       - path: .env
@@ -43,13 +43,14 @@ services:
     # ไม่ใช่การคำนวณ และ thread แชร์โมเดลตัวเดียวกัน แรมจึงแทบไม่เพิ่ม
     # (โหมด Pi Agent ต้องมี thread ว่างเสมอ เพราะ /chat รอ pi-agent ซึ่งเรียก /internal/tools กลับมา)
     command: gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 16 --timeout 180 --reload app:app
-    depends_on:
-      - pi-agent
     restart: unless-stopped
 
-  # Pi Agent (pi.dev) — agent loop ที่ให้ AI เรียก tool ค้นข้อมูลเพิ่มเองได้หลายรอบ
+  # Pi Agent (pi.dev) — โหมด agentic ที่ทดลองไว้ (AI เรียก tool ค้นข้อมูลเพิ่มเองได้หลายรอบ)
+  # ปิดอยู่: ระบบที่ใช้งานเป็น RAG — `docker compose up` ปกติจะไม่ build และไม่เปิด service นี้
+  # จะทดลองโหมด agent: ตั้ง ALLOWED_ENGINES= (ว่าง) ใน .env แล้วสั่ง docker compose --profile agent up -d --build
   # ไม่เปิด port ออกนอก: request จาก teddy มี API key ของ provider ติดมาด้วย
   pi-agent:
+    profiles: ["agent"]
     build: ./pi-agent
     environment:
       - TOOLS_URL=http://teddy:5000
