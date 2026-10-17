@@ -234,6 +234,7 @@ def normalize(raw: dict) -> dict:
         "limit": _int(raw.get("limit")),
         "usage": (str(raw["usage"]).strip() or None) if raw.get("usage") else None,
         "detail": bool(raw.get("detail")),
+        "unsupported": [],   # โค้ดเป็นคนใส่ (unsupported_terms) ไม่รับจาก LLM
     }
     fl = plan["filters"]
     for k in ("ram_gb", "ram_min"):
@@ -339,6 +340,79 @@ def check_plan(plan: dict, question: str, history: list, last_plan: dict | None)
     return fixed
 
 
+# เงื่อนไขที่ยังไม่มีตัวกรอง — บางเรื่องอยู่ในข้อความสเปก (ความละเอียดจอ, Gen ของ SSD, รุ่น Windows)
+# บางเรื่องไม่มีในข้อมูลเลย (Hz, น้ำหนัก, พอร์ต) ถ้าไม่จับไว้ ตัวตีความจะทิ้งเงื่อนไขเงียบ ๆ
+# แล้วระบบส่งรุ่นที่ไม่ได้กรองไปให้ AI ซึ่งจะเขียนว่า "มี 40 รุ่นตรงเงื่อนไข" (ชุดคำถามลูกค้า 7 ข้อ)
+UNSUPPORTED = (
+    ("ความถี่จอ (Hz)", re.compile(r"\d{2,3}\s*(?:hz|เฮิร์?ตซ์)|refresh|รีเฟรช")),
+    ("ความละเอียดจอ", re.compile(
+        r"(?<![\d.,])[2-8](?:\.5)?\s*k(?![a-z0-9])|(?<![a-z])(?:qhd|fhd|wuxga|wqxga|full\s*hd)(?![a-z])"
+        r"|(?<![a-z])uhd(?![a-z]|\s*graphics|\s*\d)|(?<!\d)(?:1080|1440|1600|2160)p|\d{4}\s*[x×]\s*\d{3,4}"
+        r"|ความละเอียด|resolution")),
+    ("Gen ของ SSD", re.compile(r"(?:ssd|pcie|nvme|m\.2).{0,20}?gen\s*\d|gen\s*\d.{0,20}?(?:ssd|pcie|nvme)")),
+    ("ความจุ SSD", re.compile(
+        r"\d+(?:\.\d+)?\s*tb(?![a-z])|(?:ssd|ความจุ|storage|hdd|ฮาร์ดดิส|ที่เก็บข้อมูล)\D{0,12}\d+\s*(?:gb|tb|กิ๊ก)"
+        r"|(?<!\d)(?:256|512)\s*(?:gb|กิ๊ก)")),
+    ("รุ่นของ Windows", re.compile(r"windows(?!\s*hello)|วินโดว์|(?<![a-z])win\s*1[01]|single\s*language|ระบบปฏิบัติการ")),
+    ("น้ำหนักเครื่อง", re.compile(r"น้ำหนัก|\d(?:\.\d+)?\s*(?:kg|กก\.?|กิโล)(?![a-z])")),
+    ("พอร์ตและช่องเชื่อมต่อ", re.compile(
+        r"usb[\s-]*c|type[\s-]*c|thunderbolt|hdmi|(?<![a-z])lan(?![a-z])|rj[\s-]*45|พอร์ต|ช่องเสียบ|ช่องต่อ"
+        r"|sd\s*card|การ์ดรีดเดอร์")),
+    ("แป้นตัวเลข (Number pad)", re.compile(r"num\s*pad|number\s*pad|แป้นตัวเลข|ปุ่มตัวเลข")),
+    ("ไฟคีย์บอร์ด", re.compile(r"ไฟคีย์บอร์ด|ไฟที่คีย์บอร์ด|คีย์บอร์ดมีไฟ|backlit|backlight|(?<![a-z])rgb(?![a-z])")),
+    ("มาตรฐาน MIL-STD", re.compile(r"mil[\s-]*std|มาตรฐานทหาร|มาตรฐานกองทัพ")),
+    ("การสแกนนิ้วหรือสแกนหน้า", re.compile(r"สแกนนิ้ว|ลายนิ้วมือ|fingerprint|สแกนหน้า|windows\s*hello")),
+    ("Wi-Fi หรือ Bluetooth", re.compile(r"wi[\s-]*fi\s*(?:6e?|7)|bluetooth\s*\d")),
+    ("ชั่วโมงใช้งานแบต", re.compile(
+        r"\d+\s*wh(?![a-z])|แบต\S*\s*(?:อยู่ได้|ใช้ได้)?\s*(?:นาน\s*)?\d+(?:\s*-\s*\d+)?\s*(?:ชั่วโมง|ชม)")),
+    ("จอสัมผัส", re.compile(r"จอสัมผัส|จอทัช|ทัชสกรีน|touch\s*screen")),
+)
+SEARCHABLE = "ยี่ห้อ ซีรีส์ ราคา CPU การ์ดจอ แรม และขนาดจอ"
+
+
+def unsupported_terms(question: str) -> list[str]:
+    """เรื่องที่ลูกค้าขอแต่ระบบยังคัดรุ่นให้ไม่ได้ (คืนชื่อเรื่องภาษาไทย ไม่ซ้ำ ตามลำดับในตาราง)"""
+    q = question.lower()
+    return [label for label, rx in UNSUPPORTED if rx.search(q)]
+
+
+def _thai_join(words: list[str]) -> str:
+    if len(words) == 1:
+        return words[0]
+    return ", ".join(words[:-1]) + " และ" + (" " if words[-1][:1].isascii() else "") + words[-1]
+
+
+def _pad(text: str) -> str:
+    """เว้นวรรคระหว่างคำไทยกับคำอังกฤษ เช่น "ตาม" + "Gen ของ SSD" + "ให้" -> "ตาม Gen ของ SSD ให้" """
+    return (" " if text[:1].isascii() else "") + text + (" " if text[-1:].isascii() else "")
+
+
+def unsupported_reply(plan: dict) -> str | None:
+    """ลูกค้าถามแต่เรื่องที่ยังคัดไม่ได้ (ไม่มีเงื่อนไขอื่น ไม่ระบุรุ่น ไม่บอกการใช้งาน) -> ตอบตรง ๆ แทนการส่งรุ่นที่ไม่ได้กรอง"""
+    labels, intent = plan.get("unsupported") or [], plan["intent"]
+    if not labels or plan["models"]:
+        return None
+    if intent == "overview" or (intent in ("list", "recommend", "rank")
+                                and not plan["usage"] and not describe(plan["filters"])):
+        return (f"ตอนนี้ผมยังคัดรุ่นตาม{_pad(_thai_join(labels))}ให้ไม่ได้ครับ ระบบค้นได้ตาม{SEARCHABLE} "
+                "ถ้าสนใจรุ่นไหน ถามสเปกของรุ่นนั้นได้เลย หรือบอกงบและการใช้งาน ผมช่วยเลือกให้ได้ครับ")
+    return None
+
+
+def unsupported_lead(plan: dict) -> str:
+    """มีเงื่อนไขอื่นที่คัดได้ด้วย -> โค้ดใส่ประโยคนี้ไว้ต้นคำตอบเอง (ไม่ฝากให้ AI จำ)"""
+    labels = plan.get("unsupported") or []
+    if not labels or plan["intent"] not in ("list", "recommend", "rank") or unsupported_reply(plan):
+        return ""
+    used = describe(plan["filters"]).split(" · ") if describe(plan["filters"]) else []
+    if plan["models"]:
+        used.append("รุ่นที่คุณถามถึง")
+    if plan["usage"]:
+        used.append("การใช้งานที่คุณบอก")
+    return (f"ผมยังคัดรุ่นตาม{_pad(_thai_join(labels))}ให้ไม่ได้ครับ "
+            f"รายการด้านล่างจึงคัดตาม{_pad(_thai_join(used))}อย่างเดียว ถ้าสนใจรุ่นไหน ถามสเปกของรุ่นนั้นต่อได้เลย\n\n")
+
+
 def understand(question: str, history: list, last_plan: dict | None, provider: dict,
                trace: dict | None = None) -> dict:
     started = time.perf_counter()
@@ -355,6 +429,9 @@ def understand(question: str, history: list, last_plan: dict | None, provider: d
         err = f"อ่าน JSON ไม่ได้ ({e}) — ใช้ตัวอ่านตัวเลขเดิมแทน"
         plan = normalize({})
     added = _safety_net(plan, question) + check_plan(plan, question, history, last_plan)
+    plan["unsupported"] = unsupported_terms(question)
+    if plan["unsupported"]:
+        added.append("ยังคัดตามเรื่องนี้ไม่ได้: " + ", ".join(plan["unsupported"]))
     if trace is not None:
         trace["understand"] = {"ms": round((time.perf_counter() - started) * 1000), "raw": raw_text[:1500],
                                "plan": plan, "added": added, "error": err}
@@ -652,13 +729,23 @@ def build_answer_prompt(plan: dict, picked: dict, question: str, history: list) 
     n = plan["limit"] or 1
     task = TASKS[intent].format(n=len(items) if intent == "list" else n, diff=diff,
                                 list_line=_list_line(plan, len(items)))
-    notes = "\n".join(f"- {x}" for x in picked["notes"]) or "-"
+    notes = list(picked["notes"])
+    scoped = describe(fl) or plan["models"] or picked["source"] in ("named", "overview")
+    if scoped:
+        head = f"{len(items)} รุ่น จากที่ตรงเงื่อนไข {picked['total']} รุ่น"
+    else:
+        # ไม่ได้กรองอะไรเลย: ถ้าลูกค้าถามเงื่อนไขที่ตัวจับไม่รู้จัก ห้าม AI อ้างว่ารายการนี้ตรงเงื่อนไข
+        head = f"{len(items)} รุ่น จากทั้งร้าน {picked['total']} รุ่น ไม่ได้กรองตามสเปก"
+        if intent == "list":
+            notes.append("ระบบไม่ได้กรองตามสเปก ถ้าคำถามของลูกค้ามีเงื่อนไขที่ไม่อยู่ใน 'ระบบเข้าใจว่า' "
+                         "ห้ามบอกว่ารุ่นในรายการตรงเงื่อนไขนั้น ให้บอกตรง ๆ ว่ายังคัดตามเรื่องนั้นไม่ได้")
+    notes = "\n".join(f"- {x}" for x in notes) or "-"
     return (f"บทสนทนาก่อนหน้า:\n{_history_text(history)}\n\n"
             f"คำถามลูกค้า: {question}\n"
             f"ระบบเข้าใจว่า: {_understood(plan)}\n"
             f"ข้อมูลร้าน: {store_stats()}\n"
             f"หมายเหตุจากระบบ:\n{notes}\n\n"
-            f"รายการที่ระบบคัดมา ({len(items)} รุ่น จากที่ตรงเงื่อนไข {picked['total']} รุ่น เรียงตามลำดับที่ควรนำเสนอ):\n"
+            f"รายการที่ระบบคัดมา ({head} เรียงตามลำดับที่ควรนำเสนอ):\n"
             + ("\n".join(lines) or "(ไม่มี)") +
             f"\n\nงานของคุณ: {task}")
 
@@ -754,15 +841,17 @@ def respond_stream(plan: dict, question: str, history: list, provider: dict, tra
     แล้วใส่คำตอบสุดท้ายไว้ที่ result["answer"]"""
     result = {} if result is None else result
     intent = plan["intent"]
-    if intent in TEMPLATED:
+    canned = unsupported_reply(plan)
+    if intent in TEMPLATED or canned:
         thing = "รุ่นนั้น"
         if intent == "not_in_store":
             words = [w for w in OUTSIDE_BRANDS if w in question.lower()]
             if words:
                 thing = f" {BRAND_CASE.get(words[0], words[0].capitalize())} "
-        text = TEMPLATES[intent].format(thing=thing)
+        text = canned or TEMPLATES[intent].format(thing=thing)
         if trace is not None:
-            trace["llm"] = {"provider": "ข้อความสำเร็จรูป (ไม่เรียก AI รอบสอง)", "model": intent,
+            trace["llm"] = {"provider": "ข้อความสำเร็จรูป (ไม่เรียก AI รอบสอง)",
+                            "model": "unsupported" if canned else intent,
                             "temperature": 0, "max_tokens": 0, "ms": 0, "usage": None,
                             "finish_reason": "stop", "thinking": "", "raw_chars": len(text)}
         result["answer"] = text
@@ -777,14 +866,22 @@ def respond_stream(plan: dict, question: str, history: list, provider: dict, tra
             trace["context"] = [{"source": "overview", "kind": "spec", "text": lp["doc"]} for lp in ends]
     else:
         picked = select(plan, question, trace)
+    lead = unsupported_lead(plan)
+    if lead:
+        picked["notes"].append(f"ลูกค้าถามเรื่อง{_pad(_thai_join(plan['unsupported']))}ด้วย แต่ระบบยังคัดตามเรื่องนี้ไม่ได้ "
+                               "รายการคัดตามเงื่อนไขอื่นเท่านั้น ห้ามสรุปว่ารุ่นในรายการตรงหรือไม่ตรงเรื่องนี้ "
+                               "ระบบแจ้งลูกค้าไว้ต้นคำตอบแล้ว ไม่ต้องพูดซ้ำ")
     prompt = build_answer_prompt(plan, picked, question, history)
     max_tokens = 6000 if intent == "list" else 3000
     core = _core()
     meta, raw, shown = {}, "", ""
+    if lead:
+        yield {"type": "delta", "text": lead}
+        shown = lead
     for piece in complete_stream(provider, [{"role": "system", "content": ANSWER_RULES},
                                             {"role": "user", "content": prompt}], max_tokens=max_tokens, meta=meta):
         raw += piece
-        text = tidy(core.visible_answer(raw))
+        text = lead + tidy(core.visible_answer(raw))
         if text == shown:
             continue
         # ตัด <think> อาจทำให้ข้อความที่โชว์ไปแล้วหายไป -> ส่งทั้งก้อนแทน
@@ -797,7 +894,7 @@ def respond_stream(plan: dict, question: str, history: list, provider: dict, tra
                              "finish_reason": meta.get("finish_reason")}], "usage": meta.get("usage")}
         trace["llm"] = {"provider": provider["label"], "model": provider["model"], "temperature": 0.1,
                         "max_tokens": max_tokens, **core.llm_trace(data, raw, meta.get("seconds", 0))}
-    result["answer"] = tidy(core.strip_think(raw)) or core.EMPTY_ANSWER
+    result["answer"] = lead + (tidy(core.strip_think(raw)) or core.EMPTY_ANSWER)
 
 
 def memory(plan: dict) -> dict:

@@ -603,6 +603,66 @@ def test_rag_v2():
         events = list(v2.respond_stream(plan(intent="greeting"), "สวัสดี", [], {}, None, result))
         check(R, "ทักทาย = ข้อความสำเร็จรูป ไม่สตรีม ไม่เรียก AI", ([], True),
               (events, result["answer"].startswith("สวัสดีครับ")), "")
+    if hasattr(v2, "unsupported_terms"):   # เงื่อนไขที่ระบบยังคัดไม่ได้ -> บอกลูกค้าตรง ๆ
+        for q, want in (
+                ("รุ่นไหนมีจอ 240Hz", ["ความถี่จอ (Hz)"]),
+                ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", ["Gen ของ SSD"]),
+                ("รุ่นไหนใช้ Windows 11 Home Single Language", ["รุ่นของ Windows"]),
+                ("รุ่นไหนจอความละเอียดสูงกว่า 2560x1600", ["ความละเอียดจอ"]),
+                ("จอ 2K งบ 40000", ["ความละเอียดจอ"]),
+                ("รุ่นไหนรองรับชาร์จผ่าน USB-C", ["พอร์ตและช่องเชื่อมต่อ"]),
+                ("รุ่นไหนผ่านมาตรฐาน MIL-STD 810H", ["มาตรฐาน MIL-STD"]),
+                ("รุ่นไหนมี Number pad", ["แป้นตัวเลข (Number pad)"]),
+                ("SSD 1TB งบ 30000", ["ความจุ SSD"]),
+                ("น้ำหนักไม่เกิน 2 kg", ["น้ำหนักเครื่อง"]),
+                ("แบตอยู่ได้ 10 ชั่วโมง", ["ชั่วโมงใช้งานแบต"]),
+                ("จอ 165Hz ความละเอียด QHD", ["ความถี่จอ (Hz)", "ความละเอียดจอ"])):
+            check(R, f"จับเงื่อนไขที่คัดไม่ได้ «{q}»", want, v2.unsupported_terms(q), "")
+        for q in ("จอ 16 นิ้ว งบไม่เกิน 30,000", "งบ 30k เล่นเกม", "งบ 25k", "แรม 16GB งบ 25000", "RTX 4060 มีรุ่นไหนบ้าง",
+                  "ต้องการเครื่องเบา แบตอึด พกไปร้านกาแฟ", "Intel UHD Graphics รุ่นไหนถูกสุด", "Legion 9i หนักกี่กิโล",
+                  "Core i7 Gen 13 งบ 35000", "แรม 32GB ขึ้นไปตัวไหนถูกที่สุด"):
+            check(R, f"ไม่จับเงื่อนไขที่คัดได้ «{q}»", [], v2.unsupported_terms(q), "")
+
+        def with_terms(p, terms):
+            p["unsupported"] = terms
+            return p
+        result = {}
+        p = with_terms(plan(intent="list"), ["ความถี่จอ (Hz)"])
+        events = list(v2.respond_stream(p, "รุ่นไหนมีจอ 240Hz", [], {}, None, result))
+        check(R, "ถามแต่เรื่องที่คัดไม่ได้ = บอกตรง ๆ ไม่เรียก AI ไม่ส่งรุ่นที่ไม่ได้กรอง", ([], True, False),
+              (events, result["answer"].startswith("ตอนนี้ผมยังคัดรุ่นตามความถี่จอ (Hz) ให้ไม่ได้ครับ"),
+               "40 รุ่น" in result["answer"]), result["answer"][:80])
+        check(R, "คำถามภาพรวมที่มีเรื่องคัดไม่ได้ = บอกตรง ๆ", True,
+              bool(v2.unsupported_reply(with_terms(plan(intent="overview"), ["รุ่นของ Windows"]))), "")
+        p = with_terms(plan(intent="list", filters={"price_max": 30000}), ["ความถี่จอ (Hz)"])
+        lead = v2.unsupported_lead(p)
+        check(R, "มีเงื่อนไขอื่นด้วย = กรองตามที่คัดได้ + ประโยคนำบอกว่าเรื่องไหนคัดไม่ได้", (None, True, True),
+              (v2.unsupported_reply(p), lead.startswith("ผมยังคัดรุ่นตามความถี่จอ (Hz) ให้ไม่ได้ครับ"),
+               "ราคาไม่เกิน 30,000 บาท" in lead), lead)
+        check(R, "เว้นวรรคระหว่างไทยกับอังกฤษ", True,
+              "ตาม Gen ของ SSD ให้ไม่ได้" in v2.unsupported_lead(
+                  with_terms(plan(intent="recommend", usage="เล่นเกม"), ["Gen ของ SSD"])), "")
+        p = with_terms(plan(intent="lookup", models=["Asus ZenBook 14 OLED"]), ["ความละเอียดจอ"])
+        check(R, "ถามสเปกของรุ่นที่ระบุ = ตอบตามปกติ (AI อ่านสเปกรุ่นนั้นได้)", (None, ""),
+              (v2.unsupported_reply(p), v2.unsupported_lead(p)), "")
+        saved = v2.complete_stream
+        v2.complete_stream = lambda *a, **k: iter(["มีทั้งหมด", " 7 รุ่นครับ"])
+        try:
+            p = with_terms(plan(intent="list", filters={"ram_gb": 24}), ["Gen ของ SSD"])
+            result = {}
+            events = list(v2.respond_stream(p, "แรม 24 ตัวไหนใช้ SSD Gen 5", [], {}, None, result))
+            check(R, "สตรีม: ประโยคนำขึ้นก่อน แล้วต่อด้วยคำตอบของ AI", (True, True),
+                  (events[0]["text"].startswith("ผมยังคัดรุ่นตาม Gen ของ SSD"),
+                   result["answer"].startswith(events[0]["text"]) and result["answer"].endswith("มีทั้งหมด 7 รุ่นครับ")),
+                  str(events[:2]))
+        finally:
+            v2.complete_stream = saved
+        picked = {"items": [], "total": 99, "notes": [], "missing": [], "source": "filter"}
+        check(R, "ไม่ได้กรองอะไร = บอก AI ว่ารายการมาจากทั้งร้าน ไม่ใช่ตรงเงื่อนไข", (True, True),
+              ("จากทั้งร้าน 99 รุ่น" in v2.build_answer_prompt(plan(intent="list"), picked, "ขอสเปคทุกตัว", []),
+               "จากที่ตรงเงื่อนไข 99 รุ่น" in v2.build_answer_prompt(plan(intent="list", filters={"ram_gb": 24}),
+                                                                     picked, "แรม 24", [])), "")
+
     mem = v2.memory(plan(filters={"ram_gb": 24}))
     check(R, "จำเงื่อนไขเฉพาะที่มีค่า (cookie เล็ก)", {"ram_gb": 24}, mem["filters"], "")
 
