@@ -1,0 +1,22 @@
+# เปิด Tech Buddy ออกอินเทอร์เน็ตด้วย Cloudflare Quick Tunnel (ไม่ต้องมีโดเมน ไม่ต้องมีบัญชี Cloudflare)
+# ได้ลิงก์สุ่ม https://xxxx.trycloudflare.com — ลิงก์เปลี่ยนทุกครั้งที่ container cloudflared รีสตาร์ต
+#
+# ใช้งาน:  docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml up -d
+# ดูลิงก์:  docker compose -f docker-compose.yml -f docker-compose.cloudflared.yml logs cloudflared | findstr trycloudflare
+# false-true
+# ความปลอดภัยเหมือน docker-compose.tunnel.yml: ปิดแผงกระบวนการคิด, rate limit จริง, พอร์ตบนเครื่องผูกแค่ localhost
+
+services:
+  teddy:
+    ports: !override
+      - "127.0.0.1:5000:5000"
+    environment:
+      - DEBUG_PANEL=false
+      - RATE_LIMIT_PER_MIN=${PUBLIC_RATE_LIMIT_PER_MIN:-20}
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://teddy:5000
+    depends_on:
+      - teddy

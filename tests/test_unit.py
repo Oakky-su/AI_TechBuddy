@@ -1,23 +1,14 @@
 # ชุดทดสอบ logic ล้วน (ไม่ต้องใช้โมเดล/API) — รัน: python tests/test_unit.py
-# ครอบคลุม: extract_budget(), strip_think(), laptops_to_documents(), ความสมบูรณ์ของ laptops.json,
-#          รายการ AI (llm_providers) และตัวช่วยค้นของ RAG ที่ไม่ต้องใช้ vector DB
+# ครอบคลุม: extract_budget(), strip_think(), เอกสารรุ่น (catalog), ความสมบูรณ์ของ laptops.json,
+#          รายการ AI (llm_providers) และขั้นตีความ/คัดรุ่น/ตอบของ RAG ที่ไม่ต้องเรียก LLM
 import json
+import os
 import re
 import sys
-import types
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE))
-
-# stub chromadb — ไม่ได้ติดตั้งบนเครื่อง host (อยู่ใน Docker image) และเทสต์ชุดนี้ไม่ได้ใช้
-if "chromadb" not in sys.modules:
-    stub = types.ModuleType("chromadb")
-    stub.PersistentClient = lambda *a, **k: None
-    stub.IS_STUB = True
-    sys.modules["chromadb"] = stub
-
-import os  # noqa: E402
 
 # ไม่ต้องโหลดโมเดล embedding ล่วงหน้าตอน import แอป (test_warmup เรียกเองโดยใช้ตัวปลอม)
 os.environ["WARMUP_EMBEDDINGS"] = "false"
@@ -25,7 +16,6 @@ os.environ["WARMUP_EMBEDDINGS"] = "false"
 import app  # noqa: E402
 import llm_providers as llm  # noqa: E402
 from app import extract_budget, strip_think  # noqa: E402
-from build_index import laptops_to_documents  # noqa: E402
 
 PASS, FAIL = [], []
 
@@ -110,39 +100,24 @@ def test_strip_think():
 
 
 # ─────────────────────────────────────────────────────────────
-# 3. laptops_to_documents() — การแปลงข้อมูลเป็นเอกสารสำหรับ embed
+# 3. catalog() — 1 รุ่น = 1 เอกสาร (สเปก + คะแนน + ระดับ + รีวิว) สำหรับ embed และส่งให้ AI
 # ─────────────────────────────────────────────────────────────
-def test_documents():
+def test_catalog():
     laptops = json.loads((BASE / "laptops.json").read_text(encoding="utf-8"))
-    docs, metas, ids = laptops_to_documents(laptops)
+    cat = app.catalog()
+    C = "catalog"
 
-    n_spec = sum(m["type"] == "spec" for m in metas)
-    n_review = sum(m["type"] == "review" for m in metas)
-    n_summary = sum(m["type"] == "summary" for m in metas)
-    total_reviews = sum(len(lp.get("reviews", [])) for lp in laptops)
-
-    check("documents", "3 ลิสต์ยาวเท่ากัน", True, len(docs) == len(metas) == len(ids), "")
-    check("documents", "จำนวนเอกสารสเปก = จำนวนรุ่น", len(laptops), n_spec, "")
-    check("documents", "จำนวนเอกสารรีวิว = รีวิวทั้งหมด", total_reviews, n_review, "")
-    check("documents", "มีเอกสารสรุป 1 อัน", 1, n_summary, "")
-    check("documents", "id ไม่ซ้ำ (ซ้ำ=Chroma ทับข้อมูล)", len(ids), len(set(ids)), "")
-    check("documents", "ทุก meta มี price เป็น int", True,
-          all(isinstance(m["price"], int) for m in metas), "ใช้กรองงบ")
-    check("documents", "ไม่มีเอกสารว่าง", True, all(d.strip() for d in docs), "")
-
-    # เอกสารสเปกต้องมีราคาอยู่ในข้อความ (LLM ต้องอ่านราคาได้จาก context)
-    spec_docs = [d for d, m in zip(docs, metas) if m["type"] == "spec"]
-    check("documents", "เอกสารสเปกมีคำว่า 'บาท'", len(spec_docs),
-          sum("บาท" in d for d in spec_docs), "")
-    # เอกสารรีวิวควรมีราคาด้วยไหม — ถ้า context ได้แต่รีวิว LLM จะไม่รู้ราคา
-    review_docs = [d for d, m in zip(docs, metas) if m["type"] == "review"]
-    check("documents", "เอกสารรีวิวมีราคาในข้อความ", len(review_docs),
-          sum("บาท" in d for d in review_docs), "ถ้า 0 = LLM อ่านราคาจากรีวิวไม่ได้")
-    # เอกสารสรุปต้องขึ้นต้นด้วยคำที่ retrieve() ใช้เช็ค
-    summary_doc = [d for d, m in zip(docs, metas) if m["type"] == "summary"][0]
-    # app.is_summary_doc() ใช้คำขึ้นต้นนี้แยกเอกสารสรุปออกจากเอกสารสเปก
-    check("documents", "เอกสารสรุปขึ้นต้น 'ภาพรวมข้อมูลโน้ตบุ๊ค'", True,
-          summary_doc.startswith("ภาพรวมข้อมูลโน้ตบุ๊ค"), "is_summary_doc() พึ่งพา prefix นี้")
+    check(C, "จำนวนเอกสาร = จำนวนรุ่น", len(laptops), len(cat), "")
+    check(C, "ชื่อรุ่นไม่ซ้ำ (ใช้เป็น key ของเวกเตอร์)", len(cat), len({lp["name"] for lp in cat}), "")
+    check(C, "ไม่มีเอกสารว่าง", True, all(lp["doc"].strip() for lp in cat), "")
+    check(C, "เอกสารมีราคา + ระดับคะแนน + รีวิว", len(cat),
+          sum("บาท" in lp["doc"] and "(ระดับ" in lp["doc"] and "รีวิวผู้ใช้:" in lp["doc"] for lp in cat),
+          "AI ต้องเห็นราคา ระดับ และรีวิวในเอกสารเดียว")
+    check(C, "อ่านแรม/จอ/ความจุเป็นตัวเลขได้ทุกรุ่น", (len(cat), len(cat), len(cat)),
+          (sum(lp["ram_gb"] > 0 for lp in cat), sum(lp["screen"] is not None for lp in cat),
+           sum(lp["storage_gb"] is not None for lp in cat)), "None = กรองตามเงื่อนไขนี้ไม่ได้")
+    check(C, "ซีรีส์ตัดรหัสรุ่นออก", ("HP Victus 16", "Lenovo LOQ"),
+          (app._series("HP Victus 16-r0356TX"), app._series("Lenovo LOQ 15IRX9-83DV01A0TA")), "")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -154,10 +129,10 @@ def test_data():
     names = [lp.get("ชื่อสินค้า") for lp in laptops]
 
     check("data", "ทุกรุ่นมี ลำดับ", 0, sum(1 for n in nos if n is None), "")
-    check("data", "ลำดับ ไม่ซ้ำ", len(nos), len(set(nos)), "ซ้ำ = id ชนกันตอน build index")
+    check("data", "ลำดับ ไม่ซ้ำ", len(nos), len(set(nos)), "")
     check("data", "ชื่อสินค้า ไม่ซ้ำ", len(names), len(set(names)), "")
     check("data", "ราคาเป็น int ทุกตัว", len(laptops),
-          sum(isinstance(lp.get("ราคา"), int) for lp in laptops), "str = Chroma กรองงบไม่ได้")
+          sum(isinstance(lp.get("ราคา"), int) for lp in laptops), "str = กรองงบไม่ได้")
     check("data", "ราคา > 0 ทุกตัว", len(laptops),
           sum(1 for lp in laptops if isinstance(lp.get("ราคา"), int) and lp["ราคา"] > 0), "")
     check("data", "ทุกรุ่นมีรีวิวอย่างน้อย 1", len(laptops),
@@ -220,74 +195,28 @@ def test_providers():
 
 
 # ─────────────────────────────────────────────────────────────
-# 6. ตัวช่วยค้นของ RAG v1 ที่ไม่ต้องใช้ vector DB
+# 6. ตัวช่วยอ่านสเปก / ระดับคะแนน / ตัวอ่านแรมและการ์ดจอจากคำถาม
 # ─────────────────────────────────────────────────────────────
 def test_helpers():
-    laptops = json.loads((BASE / "laptops.json").read_text(encoding="utf-8"))
-    app._spec_doc_by_name = {}   # ไม่มี Chroma บนเครื่อง host -> exact_match ใช้ชื่อรุ่นแทนเอกสารสเปก
-
     check("helpers", "_ram_gb('16 GB DDR5')", 16, app._ram_gb("16 GB DDR5 5600 MHz"), "")
 
-    # ระดับคะแนนต้องตรงเกณฑ์ใน SYSTEM_PROMPT รวมขอบช่วง
+    # ระดับคะแนนต้องตรงเกณฑ์ (รวมขอบช่วง)
     for score, want in ((17_999, "เริ่มต้น"), (18_000, "กลาง"), (25_000, "กลาง-สูง"),
                         (32_000, "กลาง-สูง"), (32_001, "สูง"), (49_500, "สูง")):
         check("levels", f"CPU {score:,}", want, app.score_level(score, app.CPU_LEVELS), "")
     for score, want in ((3_999, "เริ่มต้น"), (6_500, "เริ่มต้น-กลาง"), (10_500, "กลาง-สูง"),
                         (14_000, "กลาง-สูง"), (14_500, "สูง")):
         check("levels", f"GPU {score:,}", want, app.score_level(score, app.GPU_LEVELS), "")
-    spec = "X ราคา 30,990 บาท | ซีพียู (CPU): i5 | คะแนนเบนช์มาร์ก CPU 18776 / GPU 10500"
-    check("levels", "with_levels ต่อท้ายเอกสารสเปก", True,
-          app.with_levels(spec).endswith("CPU = กลาง / GPU = กลาง-สูง"), "")
-    review = "รีวิวจากผู้ใช้รุ่น X ราคา 30,990 บาท (คะแนนเบนช์มาร์ก CPU 18776 / GPU 10500): ดี"
-    check("levels", "with_levels ไม่แตะเอกสารรีวิว", review, app.with_levels(review), "")
 
-    # ค้นตรงตามสเปก/ชื่อรุ่น (เสริม vector search ทั้งสองโหมด)
-    check("exact", "gpu_terms รับ 'rtx4060' ติดกัน", ["rtx 4060"], app.gpu_terms("rtx4060 งบ 40k"), "")
-    check("exact", "gpu_terms ไม่จับเลขรุ่นอื่น", [], app.gpu_terms("Ryzen 7 7735HS งบ 30000"), "")
-    check("exact", "RTX 5070 ไม่นับ 5070 Ti", False, app.gpu_matches("NVIDIA GeForce RTX 5070 Ti", "rtx 5070"), "")
-    check("exact", "RTX 5070 Ti ตรงตัว", True, app.gpu_matches("NVIDIA GeForce RTX 5070 Ti", "rtx 5070 ti"), "")
-    legion5 = {lp["ชื่อสินค้า"] for lp in laptops if lp["ชื่อสินค้า"].startswith("Lenovo Legion 5 ")}
-    victus16 = {lp["ชื่อสินค้า"] for lp in laptops if lp["ชื่อสินค้า"].startswith("HP Victus 16")}
-    asked = set(app.asked_model_names("เทียบ Legion 5 กับ HP Victus 16 ให้หน่อย"))
-    check("exact", "เอ่ย Legion 5 + Victus 16 -> ได้ครบทุกรุ่น", True, bool(legion5) and (legion5 | victus16) <= asked, "")
-    check("exact", "ไม่ปน Legion 5a / Victus 15", set(), {n for n in asked if "Legion 5a" in n or "Victus 15" in n}, "")
-    check("exact", "รุ่นที่ไม่มีในข้อมูล -> ไม่จับอะไร", [], app.asked_model_names("MacBook Air M4 ดีไหม"), "")
-    rtx4060 = [lp for lp in laptops if "rtx 4060" in lp["spec"]["GPU"].lower() and lp["ราคา"] <= 40_000]
-    notes, _ = app.exact_match("RTX 4060 มีรุ่นไหนบ้าง งบไม่เกิน 40,000", budget=40_000)
-    check("exact", "บอกจำนวนรุ่น RTX 4060 ในงบตรงกับข้อมูล", True,
-          bool(notes) and f"มีทั้งหมด {len(rtx4060)} รุ่น" in notes[0], notes[0][:80] if notes else "")
-    check("exact", "คำถามทั่วไป -> ไม่ยุ่ง", ([], []), app.exact_match("โน้ตบุ๊คเล่นเกม งบ 25,000", budget=25_000), "")
+    check("gpu", "gpu_terms รับ 'rtx4060' ติดกัน", ["rtx 4060"], app.gpu_terms("rtx4060 งบ 40k"), "")
+    check("gpu", "gpu_terms ไม่จับเลขรุ่นอื่น", [], app.gpu_terms("Ryzen 7 7735HS งบ 30000"), "")
+    check("gpu", "RTX 5070 ไม่นับ 5070 Ti", False, app.gpu_matches("NVIDIA GeForce RTX 5070 Ti", "rtx 5070"), "")
+    check("gpu", "RTX 5070 Ti ตรงตัว", True, app.gpu_matches("NVIDIA GeForce RTX 5070 Ti", "rtx 5070 ti"), "")
 
-    # เงื่อนไขตัวเลข (hybrid retrieval): แรม / จัดอันดับคะแนน / ถูกสุดในกลุ่ม / รุ่นที่เกินงบ
-    H = "hybrid"
-    cpu = lambda lp: lp["benchmark"]["CPU Score"]
-    notes = lambda docs: " ".join(d for d in docs if d.startswith(app.EXACT_NOTE))
-    check(H, "แรม 24 = 24GB พอดี", (24, False), app.ram_condition("แรม 24 มีตัวไหนบ้าง"), "")
-    check(H, "แรม 32GB ขึ้นไป = ตั้งแต่ 32", (32, True), app.ram_condition("แรม 32GB ขึ้นไปมีรุ่นไหนบ้าง"), "")
-    check(H, "16GB แรม (ตัวเลขนำหน้า)", (16, False), app.ram_condition("อยากได้ 16GB แรม"), "")
-    check(H, "SSD 512GB ไม่ใช่แรม", None, app.ram_condition("SSD 512GB งบ 30,000"), "")
-    check(H, "\"RTX 4060 รุ่นไหน\" ไม่ใช่ขอ 4060 รุ่น", None, app.wanted_model_count("RTX 4060 รุ่นไหนคุ้มสุด"), "")
-    ram24 = [lp for lp in laptops if app._ram_gb(lp["spec"]["RAM"]) == 24]
-    docs, _ = app.exact_match("แรม 24 มีตัวไหนบ้าง")
-    check(H, "แรม 24 นับครบทุกรุ่น", True, f"มีทั้งหมด {len(ram24)} รุ่น" in notes(docs), notes(docs)[:80])
-    docs, _ = app.exact_match("เรียงจากราคามากไปน้อยให้หน่อยตัว ram 24")
-    priciest24 = max(ram24, key=lambda lp: lp["ราคา"])["ชื่อสินค้า"]
-    check(H, "เรียงแพงไปถูก: รุ่นแพงสุดขึ้นก่อน", True, f"(เรียงราคาจากแพงไปถูก): {priciest24} " in notes(docs), "")
-    top = max(laptops, key=cpu)["ชื่อสินค้า"]
-    docs, _ = app.exact_match("รุ่นไหนคะแนน CPU สูงที่สุด")
-    check(H, "CPU สูงสุดของทั้งร้านเป็นอันดับ 1", True, f"1. {top} " in notes(docs), "")
-    top30 = max((lp for lp in laptops if lp["ราคา"] <= 30_000), key=cpu)["ชื่อสินค้า"]
-    docs, _ = app.exact_match("งบ 30,000 รุ่นไหน CPU แรงที่สุด", budget=30_000)
-    check(H, "CPU แรงสุดในงบเป็นอันดับ 1", True, f"1. {top30} " in notes(docs), "")
-    rtx = min((lp for lp in laptops if "rtx" in lp["spec"]["GPU"].lower()), key=lambda lp: lp["ราคา"])
-    q = "รุ่นที่มีการ์ดจอ RTX ที่ถูกที่สุดคือรุ่นไหน"
-    docs, _ = app.exact_match(q)
-    check(H, "RTX ที่ถูกที่สุด = ถูกสุดในกลุ่ม", True, f"คือ {rtx['ชื่อสินค้า']} " in notes(docs), "")
-    check(H, "ถูกสุดในกลุ่ม -> ไม่ยัดรุ่นถูกสุดทั้งร้าน", None, app._extreme_spec_doc(q, None), "")
-    docs, _ = app.exact_match("เทียบ Legion 5 กับ HP Victus 16 งบ 45000", budget=45_000)
-    check(H, "Legion 5 เกินงบ -> บอกว่ามีแต่เกินงบ", True,
-          "Legion 5" in notes(docs) and "ห้ามตอบว่าไม่มีในข้อมูล" in notes(docs), "")
-
+    check("ram", "แรม 24 = 24GB พอดี", (24, False), app.ram_condition("แรม 24 มีตัวไหนบ้าง"), "")
+    check("ram", "แรม 32GB ขึ้นไป = ตั้งแต่ 32", (32, True), app.ram_condition("แรม 32GB ขึ้นไปมีรุ่นไหนบ้าง"), "")
+    check("ram", "16GB แรม (ตัวเลขนำหน้า)", (16, False), app.ram_condition("อยากได้ 16GB แรม"), "")
+    check("ram", "SSD 512GB ไม่ใช่แรม", None, app.ram_condition("SSD 512GB งบ 30,000"), "")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -342,10 +271,6 @@ def test_debug():
                 break
             check(D, f"DEBUG_PANEL={on} ส่ง {body} -> debug={want}", want, job["debug"], "")
             check(D, f"new_trace ตาม debug={want}", want, app.new_trace(job) is not None, "")
-            if want:
-                trace = app.new_trace(job)
-                check(D, "ตีความงบจากข้อความนี้", (25000, "message"),
-                      (trace["query"]["budget"], trace["query"]["budget_from"]), "")
         for on in (False, True):
             app.DEBUG_PANEL = on
             check(D, f"/providers บอกสถานะ debug={on}", on, client.get("/providers").get_json().get("debug"), "")
@@ -366,38 +291,6 @@ def test_debug():
     no_think = app.llm_trace({"choices": [{"message": {"content": "ตอบเลย"}}]}, "ตอบเลย", 0.5)
     check(D, "llm_trace ไม่มีความคิด = ว่าง", "", no_think["thinking"], "")
 
-    spec = "Acer Nitro V 15 ANV15-51-56QE ราคา 30,990 บาท | ซีพียู (CPU): i5"
-    review = "รีวิวจากผู้ใช้รุ่น Acer Nitro V 15 ANV15-51-56QE ราคา 30,990 บาท (คะแนน...): ดี"
-    check(D, "doc_kind / doc_name เอกสารสเปก", ("spec", "Acer Nitro V 15 ANV15-51-56QE"),
-          (app.doc_kind(spec), app.doc_name(spec)), "")
-    check(D, "doc_kind / doc_name เอกสารรีวิว", ("review", "Acer Nitro V 15 ANV15-51-56QE"),
-          (app.doc_kind(review), app.doc_name(review)), "")
-    check(D, "doc_kind ผลค้นตรง", "note", app.doc_kind("ผลค้นตรงตามสเปก (นับจากข้อมูลทั้งหมด): ..."), "")
-
-    # ค้นจริง (ต้องมี Chroma + โมเดล embed = รันใน container) — เครื่อง host ข้ามส่วนนี้
-    if not app.CHROMA_DIR.exists() or getattr(sys.modules["chromadb"], "IS_STUB", False):
-        return
-    app._spec_doc_by_name = None   # test_helpers ตั้งเป็น {} ไว้ (กรณีไม่มี Chroma)
-    q = "RTX 4060 งบไม่เกิน 40,000"
-    trace = {}
-    ctx, over = app.retrieve(q, budget=40_000, trace=trace)
-    plain, plain_over = app.retrieve(q, budget=40_000)
-    check(D, "เปิด debug แล้วผลค้นต้องเหมือนเดิมทุกตัว", (plain, plain_over), (ctx, over), "")
-    check(D, "embed: bge-m3 1024 มิติ + ตัวอย่าง 8 ค่า", (app.EMBED_MODEL, 1024, 8),
-          (trace["embed"]["model"], trace["embed"]["dims"], len(trace["embed"]["preview"])), "")
-    hits = [h for s in trace["searches"] for h in s["hits"]]
-    check(D, "ผลค้นทุกตัวอยู่ในงบ", True, bool(hits) and all(h["price"] <= 40_000 for h in hits), "")
-    check(D, "ความใกล้เคียงเรียงจากมากไปน้อยในแต่ละรอบ", True,
-          all([h["similarity"] for h in s["hits"]] == sorted((h["similarity"] for h in s["hits"]), reverse=True)
-              for s in trace["searches"]), "")
-    check(D, "ความใกล้เคียงอยู่ในช่วง 0-1", True, all(0 <= h["similarity"] <= 1 for h in hits), "")
-    check(D, "รายการเอกสารใน trace = ที่ส่งให้ AI จริง", len(ctx), len(trace["context"]), "")
-    sources = {c["source"] for c in trace["context"]}
-    check(D, "ที่มาของเอกสารเป็นชื่อที่หน้าเว็บรู้จัก", True,
-          sources <= {"vector", "exact", "near_price", "extreme", "summary"}, str(sources))
-    check(D, "RTX 4060 -> มีเอกสารจากการค้นตรง + บันทึกการปรับผลค้น", (True, True),
-          ("exact" in sources, any("RTX 4060" in a for a in trace["adjust"])), "")
-
 
 # ─────────────────────────────────────────────────────────────
 # 8.5 โหลดโมเดล embedding ล่วงหน้าตอนแอปเริ่ม (WARMUP_EMBEDDINGS)
@@ -411,13 +304,11 @@ def test_warmup():
     import time
 
     import numpy as np
-    import rag_v2
 
     W = "warmup"
     check(W, "ปิดได้ด้วย WARMUP_EMBEDDINGS=false (ชุดเทสต์ตั้งไว้)", False, app.WARMUP_EMBEDDINGS, "")
-    saved = {k: getattr(app, k) for k in ("RAG_PIPELINE", "WARMUP_EMBEDDINGS", "_embedder",
-                                          "SentenceTransformer", "get_embedder", "get_collection")}
-    saved_v2 = {k: getattr(rag_v2, k) for k in ("doc_vectors", "_doc_vecs")}
+    saved = {k: getattr(app, k) for k in ("WARMUP_EMBEDDINGS", "_embedder", "SentenceTransformer",
+                                          "get_embedder", "doc_vectors", "_doc_vecs")}
     calls, built = [], []
 
     class FakeModel:
@@ -448,35 +339,26 @@ def test_warmup():
         return got
 
     try:
-        collection = lambda: calls.append("collection")
-        rag_v2.doc_vectors = lambda: calls.append("doc_vectors")
-        ok, log = warmup(RAG_PIPELINE="v2", get_collection=collection)
-        check(W, "v2 = เตรียมเวกเตอร์ 99 รุ่น (โหลดโมเดลในตัว) + log ว่าพร้อม", (True, ["doc_vectors"], True),
+        ok, log = warmup(doc_vectors=lambda: calls.append("doc_vectors"))
+        check(W, "เตรียมเวกเตอร์ 99 รุ่น (โหลดโมเดลในตัว) + log ว่าพร้อม", (True, ["doc_vectors"], True),
               (ok, list(calls), "พร้อมแล้ว" in log), log)
-
-        calls.clear()
-        model = FakeModel()
-        ok, log = warmup(RAG_PIPELINE="v1", get_collection=collection, get_embedder=lambda: model)
-        check(W, "v1 = เปิด Chroma + โหลดโมเดล ไม่แตะ doc_vectors", (True, ["collection", ("encode", 1)]),
-              (ok, list(calls)), log)
 
         def broken():
             raise RuntimeError("ไม่มีไฟล์โมเดล")
-        rag_v2.doc_vectors = broken
         try:
-            ok, log = warmup(RAG_PIPELINE="v2")
+            ok, log = warmup(doc_vectors=broken)
             check(W, "โหลดพัง = log สาเหตุแล้วไปต่อ (คืน False)", (False, True), (ok, "ไม่มีไฟล์โมเดล" in log), log)
         except Exception as e:
             check(W, "โหลดพัง = log สาเหตุแล้วไปต่อ (คืน False)", "ไม่โยน exception", repr(e), "")
 
         calls.clear()
-        rag_v2.doc_vectors = lambda: calls.append("doc_vectors")
+        app.doc_vectors = lambda: calls.append("doc_vectors")
         app.WARMUP_EMBEDDINGS = False
         check(W, "ปิดไว้ = ไม่เริ่ม thread ไม่โหลดอะไร", (None, []), (app.start_warmup(), list(calls)), "")
 
         # เปิดไว้ = โหลดใน thread พื้นหลัง: start_warmup คืนทันทีทั้งที่การโหลดยังไม่จบ
         gate = threading.Event()
-        rag_v2.doc_vectors = lambda: gate.wait(5)
+        app.doc_vectors = lambda: gate.wait(5)
         app.WARMUP_EMBEDDINGS = True
         with contextlib.redirect_stdout(io.StringIO()):
             t0 = time.perf_counter()
@@ -496,84 +378,78 @@ def test_warmup():
         check(W, "get_embedder พร้อมกัน 4 thread = สร้างโมเดลครั้งเดียว", (1, 4, 1),
               (len(built), len(got), len({id(m) for m in got})), "")
         calls.clear()
-        rag_v2.doc_vectors, rag_v2._doc_vecs = saved_v2["doc_vectors"], None
-        got = together(rag_v2.doc_vectors)
-        check(W, "doc_vectors พร้อมกัน 4 thread = embed 99 รุ่นครั้งเดียว", ([("encode", len(rag_v2.catalog()))], 4, True),
+        app.doc_vectors, app._doc_vecs = saved["doc_vectors"], None
+        got = together(app.doc_vectors)
+        check(W, "doc_vectors พร้อมกัน 4 thread = embed 99 รุ่นครั้งเดียว", ([("encode", len(app.catalog()))], 4, True),
               (list(calls), len(got), all(v is got[0] for v in got)), "")
     finally:
         for k, v in saved.items():
             setattr(app, k, v)
-        for k, v in saved_v2.items():
-            setattr(rag_v2, k, v)
 
 
 # ─────────────────────────────────────────────────────────────
-# 9. RAG รุ่น 2 (rag_v2.py) — ตีความเป็นเงื่อนไข -> กรอง/เรียงจากข้อมูลจริง (ส่วนที่ไม่ต้องเรียก LLM)
+# 9. RAG — ตีความเป็นเงื่อนไข -> กรอง/เรียงจากข้อมูลจริง -> ตอบ (ส่วนที่ไม่ต้องเรียก LLM)
 # ─────────────────────────────────────────────────────────────
-def test_rag_v2():
-    try:
-        import rag_v2 as v2
-    except ImportError:
-        return   # โค้ดรุ่นที่ยังไม่มี rag_v2
-    R = "rag_v2"
-    plan = lambda **kw: v2.normalize({"intent": kw.pop("intent", "list"), "filters": kw.pop("filters", {}), **kw})
+def test_rag():
+    R = "rag"
+    plan = lambda **kw: app.normalize({"intent": kw.pop("intent", "list"), "filters": kw.pop("filters", {}), **kw})
 
-    p = v2.normalize({"intent": "บ้า", "filters": {"ram_gb": 23, "price_max": 15, "gpu_family": "xyz"},
+    p = app.normalize({"intent": "บ้า", "filters": {"ram_gb": 23, "price_max": 15, "gpu_family": "xyz"},
                       "sort": {"by": "speed"}, "limit": 999})
     check(R, "normalize: ค่าผิดรูปแบบทิ้งเป็น null", ("recommend", None, None, None, None, None),
           (p["intent"], p["filters"]["ram_gb"], p["filters"]["price_max"], p["filters"]["gpu_family"], p["sort"], p["limit"]), "")
-    check(R, "อ่าน JSON ที่มีข้อความปน", {"intent": "list"}, v2._parse_json('ok ```json\n{"intent": "list"}\n```'), "")
+    check(R, "อ่าน JSON ที่มีข้อความปน", {"intent": "list"}, app._parse_json('ok ```json\n{"intent": "list"}\n```'), "")
     check(R, "ขนาดจอรับได้ทั้งตัวเลขและข้อความ", [16.0, 15.6, 16.0, None],
-          [v2.normalize({"filters": {"screen": s}})["filters"]["screen"] for s in (16, "15.6", "16 นิ้ว", "165Hz")], "")
+          [app.normalize({"filters": {"screen": s}})["filters"]["screen"] for s in (16, "15.6", "16 นิ้ว", "165Hz")], "")
     for q, want in (("จอ 16 นิ้ว งบไม่เกิน 30,000", 16.0), ("จอ 15.6 มีรุ่นไหน", 15.6),
                     ("จอ 165Hz งบ 40000", None), ("แรม 16GB งบ 16000", None)):
-        p = v2.normalize({})
-        v2._safety_net(p, q)
+        p = app.normalize({})
+        app._safety_net(p, q)
         check(R, f"ตัวเติมจากข้อความ: ขนาดจอ «{q}»", want, p["filters"]["screen"], "")
 
     laptops = app.get_laptops()
     ram = lambda lp: app._ram_gb(lp["spec"]["RAM"])
-    got = v2.select(plan(filters={"ram_gb": 24}), "แรม 24")["items"]
+    got = app.select(plan(filters={"ram_gb": 24}), "แรม 24")["items"]
     check(R, "แรม 24 = ครบทุกรุ่น แรม 24 พอดี", (sum(ram(lp) == 24 for lp in laptops), True),
           (len(got), all(x["ram_gb"] == 24 for x in got)), "")
     screen = lambda lp: float(re.match(r"([\d.]+)", lp["spec"]["DISPLAY"]).group(1))
-    got = v2.select(plan(filters={"screen": 16, "price_max": 30000}), "")["items"]
+    got = app.select(plan(filters={"screen": 16, "price_max": 30000}), "")["items"]
     check(R, "จอ 16 นิ้ว งบ 30,000 = ครบและไม่มีจอ 15.6 ปน",
           sum(int(screen(lp)) == 16 and lp["ราคา"] <= 30_000 for lp in laptops),
           len(got) if all(int(x["screen"]) == 16 for x in got) else -1, "")
     check(R, "จอ 15.6 = ขนาดนั้นพอดี / จอ 15 = 15.1-15.6", (True, True),
-          (all(x["screen"] == 15.6 for x in v2.select(plan(filters={"screen": 15.6}), "")["items"]),
-           [v2.screen_ok(x, 15) for x in (15.1, 15.3, 15.6, 16.0, 14.0)] == [True, True, True, False, False]), "")
-    got = v2.select(plan(intent="list", filters={"ram_gb": 24}, sort={"by": "price", "order": "desc"}), "")["items"]
+          (all(x["screen"] == 15.6 for x in app.select(plan(filters={"screen": 15.6}), "")["items"]),
+           [app.screen_ok(x, 15) for x in (15.1, 15.3, 15.6, 16.0, 14.0)] == [True, True, True, False, False]), "")
+    got = app.select(plan(intent="list", filters={"ram_gb": 24}, sort={"by": "price", "order": "desc"}), "")["items"]
     check(R, "เรียงแพงไปถูก", True, [x["price"] for x in got] == sorted((x["price"] for x in got), reverse=True), "")
     top30 = max((lp for lp in laptops if lp["ราคา"] <= 30_000), key=lambda lp: lp["benchmark"]["CPU Score"])
-    got = v2.select(plan(intent="rank", filters={"price_max": 30000}, sort={"by": "cpu_score", "order": "desc"}), "")["items"]
+    got = app.select(plan(intent="rank", filters={"price_max": 30000}, sort={"by": "cpu_score", "order": "desc"}), "")["items"]
     check(R, "CPU แรงสุดในงบ = อันดับ 1", top30["ชื่อสินค้า"], got[0]["name"], "")
-    got = v2.select(plan(filters={"ram_gb": 24, "price_target": 24000}), "")["items"]
+    got = app.select(plan(filters={"ram_gb": 24, "price_target": 24000}), "")["items"]
     check(R, "ราคาประมาณ 24,000 = ช่วง ±15%", True,
           bool(got) and all(20_400 <= x["price"] <= 27_600 and x["ram_gb"] == 24 for x in got), str([x["price"] for x in got]))
-    got = v2.select(plan(filters={"price_max": 10000}), "")
+    got = app.select(plan(filters={"price_max": 10000}), "")
     check(R, "งบต่ำกว่ารุ่นถูกสุด -> เสนอรุ่นราคาใกล้ + หมายเหตุ", ("nearest", True),
           (got["source"], any("ไม่มีรุ่น" in n for n in got["notes"])), "")
-    got = v2.select(plan(intent="compare", models=["Legion 5", "HP Victus 16"], filters={"price_max": 45000}), "")
+    got = app.select(plan(intent="compare", models=["Legion 5", "HP Victus 16"], filters={"price_max": 45000}), "")
     check(R, "เทียบรุ่นที่เกินงบ -> บอกว่ามีแต่เกินงบ", True,
           any("Legion 5" in x["name"] for x in got["items"]) and any("นอกงบ" in n for n in got["notes"]), "")
-    found, missing = v2.resolve_models(["HP Victus 16", "MacBook Air"])
+    found, missing = app.resolve_models(["HP Victus 16", "MacBook Air"])
     check(R, "หาชื่อรุ่นจากชื่อย่อ / ชื่อที่ไม่มี", (True, ["MacBook Air"]),
           (bool(found) and all(x["name"].startswith("HP Victus 16") for x in found), missing), "")
-    lookup = v2.select(plan(intent="lookup", models=["Acer Nitro V 15 ANV15-51-56QE", "HP Victus 16-r0356TX"],
+    lookup = app.select(plan(intent="lookup", models=["Acer Nitro V 15 ANV15-51-56QE", "HP Victus 16-r0356TX"],
                             sort={"by": "price", "order": "asc"}, limit=1), "")["items"]
     check(R, "ตัวที่ถูกกว่า = รุ่นแรกหลังเรียงราคา", ["Acer Nitro V 15 ANV15-51-56QE"], [x["name"] for x in lookup], "")
     check(R, "นอกเรื่อง = ข้อความสำเร็จรูป ไม่เรียก LLM", True,
-          v2.respond(plan(intent="offtopic"), "วันนี้ฝนจะตกไหม", [], {}).startswith("เรื่องนี้ผมตอบไม่ได้"), "")
+          app.respond(plan(intent="offtopic"), "วันนี้ฝนจะตกไหม", [], {}).startswith("เรื่องนี้ผมตอบไม่ได้"), "")
     check(R, "ยี่ห้อที่ไม่มี = บอกชื่อยี่ห้อนั้น", True,
-          "MacBook" in v2.respond(plan(intent="not_in_store"), "MacBook Air M3 ราคาเท่าไหร่", [], {}), "")
+          "MacBook" in app.respond(plan(intent="not_in_store"), "MacBook Air M3 ราคาเท่าไหร่", [], {}), "")
     p = plan(intent="recommend", usage="เล่นเกม", filters={"screen": 16, "price_max": 30000})
     check(R, "ตัดการใช้งานที่ลูกค้าไม่ได้พูด", ("เล่นเกม", None),
-          (v2._ground_usage(p, "จอ 16 นิ้ว งบไม่เกิน 30,000 มีรุ่นไหนบ้าง", [], None), p["usage"]), "")
+          (app._ground_usage(p, "จอ 16 นิ้ว งบไม่เกิน 30,000 มีรุ่นไหนบ้าง", [], None), p["usage"]), "")
     p = plan(intent="recommend", usage="ตัดต่อวิดีโอ")
     check(R, "เก็บการใช้งานที่ลูกค้าพูดไว้ก่อนหน้า", (None, "ตัดต่อวิดีโอ"),
-          (v2._ground_usage(p, "มีรุ่นไหนอีกบ้าง", [{"role": "user", "content": "ตัดต่อวิดีโอ งบ 40000"}], None),
+          (app._ground_usage(p, "มีรุ่นไหนอีกบ้าง", [{"role": "user", "content": "ตัดต่อวิดีโอ งบ 40000"}], None),
            p["usage"]), "")
     for q, filters, usage, want in (
             ("ขอรุ่นที่ใช้ Core i7 งบไม่เกิน 35k", {"cpu": "Core i7", "price_max": 35000}, None, "list"),
@@ -582,131 +458,128 @@ def test_rag_v2():
             ("เล่นเกม งบ 25000", {"price_max": 25000}, "เล่นเกม", "recommend"),
             ("งบ 20000", {"price_max": 20000}, None, "recommend")):
         p = plan(intent="recommend", filters=filters, usage=usage)
-        v2.check_plan(p, q, [], None)
+        app.check_plan(p, q, [], None)
         check(R, f"แนะนำ หรือ ขอรายชื่อ «{q}»", want, p["intent"], "")
-    if hasattr(v2, "tidy"):   # คำตอบละเอียด + คำแนะนำท้ายคำตอบ + สตรีม
-        check(R, "เก็บกวาด ครับครับ", "ได้เลยครับ แล้วครับ", v2.tidy("ได้เลยครับครับ แล้วครับ ครับ"), "")
-        check(R, "รายชื่อสั้นใส่สเปกหลักครบ / ยาวใส่เฉพาะที่ถาม", (True, False),
-              ("CPU" in v2._list_line(plan(filters={"ram_gb": 24}), 13),
-               "CPU" in v2._list_line(plan(filters={"ram_gb": 16}), 30)), "")
-        check(R, "ภาพรวมร้านมีช่วงราคาแยกยี่ห้อ", True, "Lenovo 25 รุ่น (" in v2.store_stats(), "")
-        result = {}
-        events = list(v2.respond_stream(plan(intent="greeting"), "สวัสดี", [], {}, None, result))
-        check(R, "ทักทาย = ข้อความสำเร็จรูป ไม่สตรีม ไม่เรียก AI", ([], True),
-              (events, result["answer"].startswith("สวัสดีครับ")), "")
-    if hasattr(v2, "unsupported_terms"):   # เงื่อนไขที่ระบบยังคัดไม่ได้ -> บอกลูกค้าตรง ๆ
-        for q, want in (
-                ("รุ่นไหนมีจอ 240Hz", ["ความถี่จอ (Hz)"]),
-                ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", ["Gen ของ SSD"]),
-                ("รุ่นไหนใช้ Windows 11 Home Single Language", ["รุ่นของ Windows"]),
-                ("รุ่นไหนจอความละเอียดสูงกว่า 2560x1600", ["ความละเอียดจอ"]),
-                ("จอ 2K งบ 40000", ["ความละเอียดจอ"]),
-                ("รุ่นไหนรองรับชาร์จผ่าน USB-C", ["พอร์ตและช่องเชื่อมต่อ"]),
-                ("รุ่นไหนผ่านมาตรฐาน MIL-STD 810H", ["มาตรฐาน MIL-STD"]),
-                ("รุ่นไหนมี Number pad", ["แป้นตัวเลข (Number pad)"]),
-                ("SSD 1TB งบ 30000", ["ความจุ SSD"]),
-                ("น้ำหนักไม่เกิน 2 kg", ["น้ำหนักเครื่อง"]),
-                ("แบตอยู่ได้ 10 ชั่วโมง", ["ชั่วโมงใช้งานแบต"]),
-                ("จอ 165Hz ความละเอียด QHD", ["ความถี่จอ (Hz)", "ความละเอียดจอ"])):
-            check(R, f"จับเงื่อนไขที่คัดไม่ได้ «{q}»", want, v2.unsupported_terms(q), "")
-        for q in ("จอ 16 นิ้ว งบไม่เกิน 30,000", "งบ 30k เล่นเกม", "งบ 25k", "แรม 16GB งบ 25000", "RTX 4060 มีรุ่นไหนบ้าง",
-                  "ต้องการเครื่องเบา แบตอึด พกไปร้านกาแฟ", "Intel UHD Graphics รุ่นไหนถูกสุด", "Legion 9i หนักกี่กิโล",
-                  "Core i7 Gen 13 งบ 35000", "แรม 32GB ขึ้นไปตัวไหนถูกที่สุด"):
-            check(R, f"ไม่จับเงื่อนไขที่คัดได้ «{q}»", [], v2.unsupported_terms(q), "")
+    check(R, "เก็บกวาด ครับครับ", "ได้เลยครับ แล้วครับ", app.tidy("ได้เลยครับครับ แล้วครับ ครับ"), "")
+    check(R, "รายชื่อสั้นใส่สเปกหลักครบ / ยาวใส่เฉพาะที่ถาม", (True, False),
+          ("CPU" in app._list_line(plan(filters={"ram_gb": 24}), 13),
+           "CPU" in app._list_line(plan(filters={"ram_gb": 16}), 30)), "")
+    check(R, "ภาพรวมร้านมีช่วงราคาแยกยี่ห้อ", True, "Lenovo 25 รุ่น (" in app.store_stats(), "")
+    result = {}
+    events = list(app.respond_stream(plan(intent="greeting"), "สวัสดี", [], {}, None, result))
+    check(R, "ทักทาย = ข้อความสำเร็จรูป ไม่สตรีม ไม่เรียก AI", ([], True),
+          (events, result["answer"].startswith("สวัสดีครับ")), "")
+    for q, want in (
+            ("รุ่นไหนมีจอ 240Hz", ["ความถี่จอ (Hz)"]),
+            ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", ["Gen ของ SSD"]),
+            ("รุ่นไหนใช้ Windows 11 Home Single Language", ["รุ่นของ Windows"]),
+            ("รุ่นไหนจอความละเอียดสูงกว่า 2560x1600", ["ความละเอียดจอ"]),
+            ("จอ 2K งบ 40000", ["ความละเอียดจอ"]),
+            ("รุ่นไหนรองรับชาร์จผ่าน USB-C", ["พอร์ตและช่องเชื่อมต่อ"]),
+            ("รุ่นไหนผ่านมาตรฐาน MIL-STD 810H", ["มาตรฐาน MIL-STD"]),
+            ("รุ่นไหนมี Number pad", ["แป้นตัวเลข (Number pad)"]),
+            ("SSD 1TB งบ 30000", ["ความจุ SSD"]),
+            ("น้ำหนักไม่เกิน 2 kg", ["น้ำหนักเครื่อง"]),
+            ("แบตอยู่ได้ 10 ชั่วโมง", ["ชั่วโมงใช้งานแบต"]),
+            ("จอ 165Hz ความละเอียด QHD", ["ความถี่จอ (Hz)", "ความละเอียดจอ"])):
+        check(R, f"จับเงื่อนไขที่คัดไม่ได้ «{q}»", want, app.unsupported_terms(q), "")
+    for q in ("จอ 16 นิ้ว งบไม่เกิน 30,000", "งบ 30k เล่นเกม", "งบ 25k", "แรม 16GB งบ 25000", "RTX 4060 มีรุ่นไหนบ้าง",
+              "ต้องการเครื่องเบา แบตอึด พกไปร้านกาแฟ", "Intel UHD Graphics รุ่นไหนถูกสุด", "Legion 9i หนักกี่กิโล",
+              "Core i7 Gen 13 งบ 35000", "แรม 32GB ขึ้นไปตัวไหนถูกที่สุด"):
+        check(R, f"ไม่จับเงื่อนไขที่คัดได้ «{q}»", [], app.unsupported_terms(q), "")
 
-        def with_terms(p, terms):
-            p["unsupported"] = terms
-            return p
+    def with_terms(p, terms):
+        p["unsupported"] = terms
+        return p
+    result = {}
+    p = with_terms(plan(intent="list"), ["ความถี่จอ (Hz)"])
+    events = list(app.respond_stream(p, "รุ่นไหนมีจอ 240Hz", [], {}, None, result))
+    check(R, "ถามแต่เรื่องที่คัดไม่ได้ = บอกตรง ๆ ไม่เรียก AI ไม่ส่งรุ่นที่ไม่ได้กรอง", ([], True, False),
+          (events, result["answer"].startswith("ตอนนี้ผมยังคัดรุ่นตามความถี่จอ (Hz) ให้ไม่ได้ครับ"),
+           "40 รุ่น" in result["answer"]), result["answer"][:80])
+    check(R, "คำถามภาพรวมที่มีเรื่องคัดไม่ได้ = บอกตรง ๆ", True,
+          bool(app.unsupported_reply(with_terms(plan(intent="overview"), ["รุ่นของ Windows"]))), "")
+    p = with_terms(plan(intent="list", filters={"price_max": 30000}), ["ความถี่จอ (Hz)"])
+    lead = app.unsupported_lead(p)
+    check(R, "มีเงื่อนไขอื่นด้วย = กรองตามที่คัดได้ + ประโยคนำบอกว่าเรื่องไหนคัดไม่ได้", (None, True, True),
+          (app.unsupported_reply(p), lead.startswith("ผมยังคัดรุ่นตามความถี่จอ (Hz) ให้ไม่ได้ครับ"),
+           "ราคาไม่เกิน 30,000 บาท" in lead), lead)
+    check(R, "เว้นวรรคระหว่างไทยกับอังกฤษ", True,
+          "ตาม Gen ของ SSD ให้ไม่ได้" in app.unsupported_lead(
+              with_terms(plan(intent="recommend", usage="เล่นเกม"), ["Gen ของ SSD"])), "")
+    p = with_terms(plan(intent="lookup", models=["Asus ZenBook 14 OLED"]), ["ความละเอียดจอ"])
+    check(R, "ถามสเปกของรุ่นที่ระบุ = ตอบตามปกติ (AI อ่านสเปกรุ่นนั้นได้)", (None, ""),
+          (app.unsupported_reply(p), app.unsupported_lead(p)), "")
+    saved = app.complete_stream
+    app.complete_stream = lambda *a, **k: iter(["มีทั้งหมด", " 7 รุ่นครับ"])
+    try:
+        p = with_terms(plan(intent="list", filters={"ram_gb": 24}), ["Gen ของ SSD"])
         result = {}
-        p = with_terms(plan(intent="list"), ["ความถี่จอ (Hz)"])
-        events = list(v2.respond_stream(p, "รุ่นไหนมีจอ 240Hz", [], {}, None, result))
-        check(R, "ถามแต่เรื่องที่คัดไม่ได้ = บอกตรง ๆ ไม่เรียก AI ไม่ส่งรุ่นที่ไม่ได้กรอง", ([], True, False),
-              (events, result["answer"].startswith("ตอนนี้ผมยังคัดรุ่นตามความถี่จอ (Hz) ให้ไม่ได้ครับ"),
-               "40 รุ่น" in result["answer"]), result["answer"][:80])
-        check(R, "คำถามภาพรวมที่มีเรื่องคัดไม่ได้ = บอกตรง ๆ", True,
-              bool(v2.unsupported_reply(with_terms(plan(intent="overview"), ["รุ่นของ Windows"]))), "")
-        p = with_terms(plan(intent="list", filters={"price_max": 30000}), ["ความถี่จอ (Hz)"])
-        lead = v2.unsupported_lead(p)
-        check(R, "มีเงื่อนไขอื่นด้วย = กรองตามที่คัดได้ + ประโยคนำบอกว่าเรื่องไหนคัดไม่ได้", (None, True, True),
-              (v2.unsupported_reply(p), lead.startswith("ผมยังคัดรุ่นตามความถี่จอ (Hz) ให้ไม่ได้ครับ"),
-               "ราคาไม่เกิน 30,000 บาท" in lead), lead)
-        check(R, "เว้นวรรคระหว่างไทยกับอังกฤษ", True,
-              "ตาม Gen ของ SSD ให้ไม่ได้" in v2.unsupported_lead(
-                  with_terms(plan(intent="recommend", usage="เล่นเกม"), ["Gen ของ SSD"])), "")
-        p = with_terms(plan(intent="lookup", models=["Asus ZenBook 14 OLED"]), ["ความละเอียดจอ"])
-        check(R, "ถามสเปกของรุ่นที่ระบุ = ตอบตามปกติ (AI อ่านสเปกรุ่นนั้นได้)", (None, ""),
-              (v2.unsupported_reply(p), v2.unsupported_lead(p)), "")
-        saved = v2.complete_stream
-        v2.complete_stream = lambda *a, **k: iter(["มีทั้งหมด", " 7 รุ่นครับ"])
-        try:
-            p = with_terms(plan(intent="list", filters={"ram_gb": 24}), ["Gen ของ SSD"])
-            result = {}
-            events = list(v2.respond_stream(p, "แรม 24 ตัวไหนใช้ SSD Gen 5", [], {}, None, result))
-            check(R, "สตรีม: ประโยคนำขึ้นก่อน แล้วต่อด้วยคำตอบของ AI", (True, True),
-                  (events[0]["text"].startswith("ผมยังคัดรุ่นตาม Gen ของ SSD"),
-                   result["answer"].startswith(events[0]["text"]) and result["answer"].endswith("มีทั้งหมด 7 รุ่นครับ")),
-                  str(events[:2]))
-        finally:
-            v2.complete_stream = saved
-        picked = {"items": [], "total": 99, "notes": [], "missing": [], "source": "filter"}
-        check(R, "ไม่ได้กรองอะไร = บอก AI ว่ารายการมาจากทั้งร้าน ไม่ใช่ตรงเงื่อนไข", (True, True),
-              ("จากทั้งร้าน 99 รุ่น" in v2.build_answer_prompt(plan(intent="list"), picked, "ขอสเปคทุกตัว", []),
-               "จากที่ตรงเงื่อนไข 99 รุ่น" in v2.build_answer_prompt(plan(intent="list", filters={"ram_gb": 24}),
-                                                                     picked, "แรม 24", [])), "")
+        events = list(app.respond_stream(p, "แรม 24 ตัวไหนใช้ SSD Gen 5", [], {}, None, result))
+        check(R, "สตรีม: ประโยคนำขึ้นก่อน แล้วต่อด้วยคำตอบของ AI", (True, True),
+              (events[0]["text"].startswith("ผมยังคัดรุ่นตาม Gen ของ SSD"),
+               result["answer"].startswith(events[0]["text"]) and result["answer"].endswith("มีทั้งหมด 7 รุ่นครับ")),
+              str(events[:2]))
+    finally:
+        app.complete_stream = saved
+    picked = {"items": [], "total": 99, "notes": [], "missing": [], "source": "filter"}
+    check(R, "ไม่ได้กรองอะไร = บอก AI ว่ารายการมาจากทั้งร้าน ไม่ใช่ตรงเงื่อนไข", (True, True),
+          ("จากทั้งร้าน 99 รุ่น" in app.build_answer_prompt(plan(intent="list"), picked, "ขอสเปคทุกตัว", []),
+           "จากที่ตรงเงื่อนไข 99 รุ่น" in app.build_answer_prompt(plan(intent="list", filters={"ram_gb": 24}),
+                                                                 picked, "แรม 24", [])), "")
 
-    if hasattr(v2, "spec_extras"):   # ความละเอียดจอ / SSD / Windows อ่านจากคำถามด้วยโค้ด
-        for q, want in (
-                ("รุ่นไหนจอความละเอียดสูงกว่า 2560x1600", {"res_gt": 2560}),
-                ("จอ 2560x1600 มีรุ่นไหนบ้าง", {"res_w": 2560, "res_h": 1600}),
-                ("จอ 2K งบไม่เกิน 40000", {"res_w": 2560}),
-                ("จอ 2K ขึ้นไป", {"res_min": 2560}),
-                ("จอ 4K มีไหม", {"res_w": 3840}),
-                ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", {"ssd_gen": [3, 5]}),
-                ("SSD Gen 4 ขึ้นไป งบ 30000", {"ssd_gen": [4, 5]}),
-                ("SSD 1TB งบ 30000", {"storage_gb": 1000}),
-                ("ความจุ 1TB ขึ้นไป", {"storage_min": 1000}),
-                ("รุ่นไหนใช้ Windows 11 Home Single Language", {"os": "single language"}),
-                ("มีรุ่นที่เป็น Windows 11 Pro ไหม", {"os": "pro"})):
-            check(R, f"อ่านเงื่อนไขสเปกจากคำถาม «{q}»", want, v2.spec_extras(q)[0], "")
-        for q in ("Core i7 Gen 13 งบ 35000", "Intel UHD Graphics รุ่นไหนถูกสุด", "งบ 25k เล่นเกม",
-                  "แรม 16GB งบ 25000", "Legion Pro 5 ราคาเท่าไหร่", "จอ 16 นิ้ว งบ 30000"):
-            check(R, f"ไม่อ่านเป็นเงื่อนไขจอ/SSD/Windows «{q}»", {}, v2.spec_extras(q)[0], "")
-        for q in ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", "รุ่นไหนจอความละเอียดสูงกว่า 2560x1600",
-                  "รุ่นไหนใช้ Windows 11 Home Single Language", "SSD 1TB งบ 30000"):
-            covered = v2.spec_extras(q)[1]
-            check(R, f"คัดได้แล้ว ไม่บอกว่าคัดไม่ได้ «{q}»", [],
-                  [t for t in v2.unsupported_terms(q) if t not in covered], "")
-        disp, stor = (lambda lp: lp["spec"]["DISPLAY"]), (lambda lp: lp["spec"]["STORAGE"])
-        width = lambda lp: int(re.search(r"\((\d{4})\s*x", disp(lp)).group(1)) if re.search(r"\((\d{4})\s*x", disp(lp)) else 0
-        for fl, want, label in (
-                ({"res_gt": 2560}, sum(width(lp) > 2560 for lp in laptops), "จอละเอียดกว่า 2560x1600"),
-                ({"res_w": 2560}, sum(width(lp) == 2560 for lp in laptops), "จอกว้าง 2560"),
-                ({"ssd_gen": [3, 5]}, sum(bool(re.search(r"Gen [35]$", stor(lp))) for lp in laptops), "SSD Gen 3 หรือ 5"),
-                ({"storage_gb": 1000}, sum(stor(lp).startswith("1TB") for lp in laptops), "ความจุ 1TB"),
-                ({"os": "single language"}, sum("Single Language" in lp["spec"]["OS"] for lp in laptops),
-                 "Windows Single Language")):
-            p = plan()
-            p["filters"].update(fl)   # โค้ดเป็นคนใส่ (normalize ไม่รับค่าพวกนี้จาก LLM)
-            check(R, f"กรอง{label} = ครบทุกรุ่น", want, v2.select(p, "")["total"], "")
+    for q, want in (
+            ("รุ่นไหนจอความละเอียดสูงกว่า 2560x1600", {"res_gt": 2560}),
+            ("จอ 2560x1600 มีรุ่นไหนบ้าง", {"res_w": 2560, "res_h": 1600}),
+            ("จอ 2K งบไม่เกิน 40000", {"res_w": 2560}),
+            ("จอ 2K ขึ้นไป", {"res_min": 2560}),
+            ("จอ 4K มีไหม", {"res_w": 3840}),
+            ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", {"ssd_gen": [3, 5]}),
+            ("SSD Gen 4 ขึ้นไป งบ 30000", {"ssd_gen": [4, 5]}),
+            ("SSD 1TB งบ 30000", {"storage_gb": 1000}),
+            ("ความจุ 1TB ขึ้นไป", {"storage_min": 1000}),
+            ("รุ่นไหนใช้ Windows 11 Home Single Language", {"os": "single language"}),
+            ("มีรุ่นที่เป็น Windows 11 Pro ไหม", {"os": "pro"})):
+        check(R, f"อ่านเงื่อนไขสเปกจากคำถาม «{q}»", want, app.spec_extras(q)[0], "")
+    for q in ("Core i7 Gen 13 งบ 35000", "Intel UHD Graphics รุ่นไหนถูกสุด", "งบ 25k เล่นเกม",
+              "แรม 16GB งบ 25000", "Legion Pro 5 ราคาเท่าไหร่", "จอ 16 นิ้ว งบ 30000"):
+        check(R, f"ไม่อ่านเป็นเงื่อนไขจอ/SSD/Windows «{q}»", {}, app.spec_extras(q)[0], "")
+    for q in ("รุ่นไหนใช้ SSD Gen 5 หรือ Gen 3", "รุ่นไหนจอความละเอียดสูงกว่า 2560x1600",
+              "รุ่นไหนใช้ Windows 11 Home Single Language", "SSD 1TB งบ 30000"):
+        covered = app.spec_extras(q)[1]
+        check(R, f"คัดได้แล้ว ไม่บอกว่าคัดไม่ได้ «{q}»", [],
+              [t for t in app.unsupported_terms(q) if t not in covered], "")
+    disp, stor = (lambda lp: lp["spec"]["DISPLAY"]), (lambda lp: lp["spec"]["STORAGE"])
+    width = lambda lp: int(re.search(r"\((\d{4})\s*x", disp(lp)).group(1)) if re.search(r"\((\d{4})\s*x", disp(lp)) else 0
+    for fl, want, label in (
+            ({"res_gt": 2560}, sum(width(lp) > 2560 for lp in laptops), "จอละเอียดกว่า 2560x1600"),
+            ({"res_w": 2560}, sum(width(lp) == 2560 for lp in laptops), "จอกว้าง 2560"),
+            ({"ssd_gen": [3, 5]}, sum(bool(re.search(r"Gen [35]$", stor(lp))) for lp in laptops), "SSD Gen 3 หรือ 5"),
+            ({"storage_gb": 1000}, sum(stor(lp).startswith("1TB") for lp in laptops), "ความจุ 1TB"),
+            ({"os": "single language"}, sum("Single Language" in lp["spec"]["OS"] for lp in laptops),
+             "Windows Single Language")):
         p = plan()
-        p["filters"].update({"ssd_gen": [3, 5], "storage_gb": 1000})
-        check(R, "อธิบายเงื่อนไขใหม่เป็นภาษาคน", "SSD Gen 3 หรือ 5 · ความจุ 1TB", v2.describe(p["filters"]), "")
+        p["filters"].update(fl)   # โค้ดเป็นคนใส่ (normalize ไม่รับค่าพวกนี้จาก LLM)
+        check(R, f"กรอง{label} = ครบทุกรุ่น", want, app.select(p, "")["total"], "")
+    p = plan()
+    p["filters"].update({"ssd_gen": [3, 5], "storage_gb": 1000})
+    check(R, "อธิบายเงื่อนไขใหม่เป็นภาษาคน", "SSD Gen 3 หรือ 5 · ความจุ 1TB", app.describe(p["filters"]), "")
 
-    mem = v2.memory(plan(filters={"ram_gb": 24}))
+    mem = app.memory(plan(filters={"ram_gb": 24}))
     check(R, "จำเงื่อนไขเฉพาะที่มีค่า (cookie เล็ก)", {"ram_gb": 24}, mem["filters"], "")
 
 
 if __name__ == "__main__":
     test_budget()
     test_strip_think()
-    test_documents()
+    test_catalog()
     test_data()
     test_providers()
     test_helpers()
     test_stream()
     test_debug()
     test_warmup()
-    test_rag_v2()
+    test_rag()
 
     print(f"\n{'='*78}\nUNIT TESTS: ผ่าน {len(PASS)} / {len(PASS)+len(FAIL)}\n{'='*78}")
     if FAIL:

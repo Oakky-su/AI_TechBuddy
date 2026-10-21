@@ -7,18 +7,17 @@
 #          (หรือใส่ COMPOSE_FILE ใน .env แล้วสั่ง docker compose up -d ได้เลย — ดู README)
 #
 # ต่างจากโหมดพัฒนาตรงที่เปิดให้คนนอกใช้ จึงปิดของที่ไม่ควรออกไปข้างนอก:
-#   - ENABLE_DEBUG=false          /debug เปิดเผย prompt ทั้งก้อน
+#   - DEBUG_PANEL=false           แผงกระบวนการคิดเปิดเผย prompt ทั้งก้อน
 #   - rate limit ต่อ IP ของจริง    กันคนเดียวยิงจนโควตา LLM หมด (ค่า dev 1000/นาที ใช้กับเทสต์เท่านั้น)
 #   - พอร์ต 5000 ผูกแค่ localhost  ทางเข้าจากข้างนอกมีทางเดียวคือ tunnel (ไม่งั้นคนใน LAN
 #                                   ยิงตรงแล้วปลอม CF-Connecting-IP หลบ rate limit ได้)
-#   - Traefik ไม่ส่ง /debug ต่อให้แอปเลย (ชั้นป้องกันซ้อนจาก ENABLE_DEBUG)
 
 services:
   teddy:
     ports: !override
       - "127.0.0.1:5000:5000"
     environment:
-      - ENABLE_DEBUG=false
+      - DEBUG_PANEL=false
       - RATE_LIMIT_PER_MIN=${PUBLIC_RATE_LIMIT_PER_MIN:-20}
     # default = เครือข่ายภายในของ compose, edge = ให้ traefik มองเห็น
     networks: [default, edge]
@@ -27,7 +26,7 @@ services:
       - traefik.docker.network=edge
       - traefik.http.routers.techbuddy.entrypoints=web
       # เปลี่ยนโดเมนได้ด้วย TECHBUDDY_HOST ใน .env (panel อ่านชื่อใน Host(...) ไปสร้าง DNS ให้เอง)
-      - traefik.http.routers.techbuddy.rule=Host(`${TECHBUDDY_HOST:-techbuddy.pemaai.online}`) && !PathPrefix(`/debug`)
+      - traefik.http.routers.techbuddy.rule=Host(`${TECHBUDDY_HOST:-techbuddy.pemaai.online}`)
       - traefik.http.services.techbuddy.loadbalancer.server.port=5000
 
 networks:

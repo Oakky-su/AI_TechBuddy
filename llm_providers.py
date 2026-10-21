@@ -97,8 +97,3 @@ def public_list() -> dict:
         ],
     }
 
-
-def wants_no_think_suffix(provider: dict, disable_thinking: bool) -> bool:
-    """คำสั่ง /no_think ใช้ได้กับโมเดลตระกูลที่คิดใน <think> (ThaiLLM/Qwen) เท่านั้น
-    ส่งให้โมเดลอื่นจะกลายเป็นข้อความแปลก ๆ ท้ายคำถาม"""
-    return disable_thinking and bool(provider.get("think_tags"))

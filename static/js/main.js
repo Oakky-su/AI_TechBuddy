@@ -288,9 +288,6 @@ const chipEntry = new WeakMap();   // ปุ่มใต้คำตอบ -> { 
 let shownEntry = null;             // คำตอบที่แผงโชว์อยู่
 
 const SOURCE_NAME = {
-  vector: 'ค้นเวกเตอร์', exact: 'ตรงชื่อรุ่น/สเปก', near_price: 'ราคาใกล้งบ',
-  extreme: 'ถูก/แพงสุด', summary: 'ภาพรวมร้าน',
-  // RAG รุ่น 2
   filter: 'กรองตามเงื่อนไข', named: 'รุ่นที่ลูกค้าเอ่ยถึง', nearest: 'ราคาใกล้ที่สุด', overview: 'ถูก/แพงสุดในร้าน',
 };
 const INTENT_NAME = {
@@ -304,7 +301,7 @@ const FILTER_NAME = {
   series: 'ซีรีส์', screen: 'จอ (นิ้ว)',
 };
 const SORT_NAME = { price: 'ราคา', cpu_score: 'คะแนน CPU', gpu_score: 'คะแนน GPU', ram: 'แรม' };
-const KIND_NAME = { spec: 'สเปก', review: 'รีวิว', summary: 'ภาพรวม', note: 'ผลค้นตรง' };
+const KIND_NAME = { spec: 'สเปก' };
 const FINISH_NAME = { stop: 'ตอบจบปกติ', length: 'โทเคนหมดก่อนตอบจบ' };
 
 const fmtNum = n => (n == null ? '–' : Number(n).toLocaleString('en-US'));
@@ -328,16 +325,13 @@ function debugSearch(s) {
 
 /* ขั้นตอนทั้งหมดเป็น HTML (escape แล้ว) + ตัวเลขสรุปบนหัวแผง */
 function debugStepsHtml(t) {
-  const q = t.query || {};
   const ai = t.llm || {};
   const usage = ai.usage || {};
   const list = arr => (arr?.length ? arr.map(escapeHtml).join(', ') : '–');
-  const yesNo = v => (v ? 'ใช่' : 'ไม่');
-  const budgetFrom = { message: 'อ่านจากข้อความนี้', session: 'จำไว้จากข้อความก่อนหน้า' }[q.budget_from];
   const steps = [];
 
   if (t.understand) {
-    // RAG รุ่น 2: AI แปลงคำถาม (+ ประวัติแชท) เป็นเงื่อนไข JSON แล้วโค้ดกรองจากข้อมูลจริง
+    // AI แปลงคำถาม (+ ประวัติแชท) เป็นเงื่อนไข JSON แล้วโค้ดกรองจากข้อมูลจริง
     const u = t.understand, p = u.plan || {};
     const filters = Object.entries(p.filters || {}).filter(([, v]) => v != null)
       .map(([k, v]) => `${FILTER_NAME[k] || k} ${typeof v === 'number' && v >= 1000 ? fmtNum(v) : v}`);
@@ -353,16 +347,7 @@ function debugStepsHtml(t) {
       ${debugRow('เวลา', `${fmtNum(u.ms)} ms`)}
     </dl>${u.error ? `<p class="dbg-dim">${escapeHtml(u.error)}</p>` : ''}
     <details><summary>JSON ที่ AI ตอบ</summary><pre class="dbg-pre">${escapeHtml(u.raw || '')}</pre></details>`]);
-  } else steps.push(['ตีความคำถาม', `<dl class="dbg-kv">
-    ${debugRow('งบ (เพดาน)', q.budget != null
-      ? `${fmtNum(q.budget)} บาท${budgetFrom ? ` <span class="dbg-dim">· ${budgetFrom}</span>` : ''}` : 'ไม่ได้บอก')}
-    ${debugRow('ราคาขั้นต่ำ', q.min_price != null ? `${fmtNum(q.min_price)} บาท` : '–')}
-    ${debugRow('ขอเทียบกี่รุ่น', q.model_count ? `${q.model_count} รุ่น` : '–')}
-    ${debugRow('ถามรุ่นถูกที่สุด / แพงที่สุด', `${yesNo(q.cheapest)} / ${yesNo(q.priciest)}`)}
-    ${debugRow('การ์ดจอที่จับได้', list(q.gpu_terms?.map(g => g.toUpperCase())))}
-    ${debugRow('ชื่อรุ่นที่จับได้', list(q.asked_models))}
-    ${debugRow('ประวัติแชทที่ส่งให้ AI', `${q.history_msgs || 0} ข้อความ`)}
-  </dl>`]);
+  }
 
   if (t.embed) {
     const rest = t.embed.dims - t.embed.preview.length;
@@ -372,13 +357,13 @@ function debugStepsHtml(t) {
        <code class="dbg-vec">[${t.embed.preview.map(v => v.toFixed(4)).join(', ')}, … อีก ${fmtNum(rest)} ค่า]</code>`]);
   }
   if (t.searches) {
-    steps.push(['ค้นในฐานข้อมูลเวกเตอร์', t.searches.map(debugSearch).join('')
+    steps.push(['เรียงรุ่นตามความใกล้เคียงกับการใช้งาน', t.searches.map(debugSearch).join('')
       + '<p class="dbg-dim">ความใกล้เคียง = cosine similarity ระหว่างเวกเตอร์คำถามกับเอกสาร (1 = ความหมายตรงกันที่สุด)</p>']);
   }
   if (t.adjust) {
-    steps.push(['ปรับผลค้นด้วยกฎของระบบ', t.adjust.length
+    steps.push(['คัดรุ่นจากข้อมูลจริง', t.adjust.length
       ? `<ul>${t.adjust.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>`
-      : '<p class="dbg-dim">ไม่มี ใช้ผลค้นตามลำดับความใกล้เคียงตรง ๆ</p>']);
+      : '<p class="dbg-dim">ไม่มีเงื่อนไข ใช้ทุกรุ่นในร้าน</p>']);
   }
   if (t.context) {
     steps.push([`ข้อมูลที่ส่งให้ AI (${t.context.length} ชิ้น ตามลำดับใน prompt)`,

@@ -23,9 +23,6 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 # copy โค้ด + laptops.json
 COPY . .
 
-# สร้าง Chroma vector index ตอน build เลย (image พร้อมใช้งานทันที ไม่ต้อง embed ตอนรัน)
-RUN python build_index.py
-
 EXPOSE 5000
 
 # gunicorn — 1 worker หลายเธรด (โมเดลกินแรม + session secret ต้องอยู่ process เดียว)

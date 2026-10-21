@@ -18,8 +18,7 @@
       "api_key_env": "THAILLM_API_KEY",
       "key_required": true,
       "context_window": 32768,
-      "max_tokens": 1536,
-      "think_tags": true
+      "max_tokens": 1536
     },
     {
       "id": "thaillm-typhoon",

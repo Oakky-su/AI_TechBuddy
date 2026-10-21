@@ -1,8 +1,22 @@
-# ไฟล์หลักของแอป Flask — RAG chatbot "TechBuddy" แนะนำโน้ตบุ๊ค
-# เป็น RAG ธรรมดา: ทุกคำถามทำตามขั้นตอนเดิม เรียก LLM ตามลำดับตายตัว (ไม่มีโหมด agent)
-#   RAG_PIPELINE=v2 (ค่าเริ่มต้น): LLM ตีความคำถาม -> โค้ดคัดรุ่นจาก laptops.json -> LLM แต่งคำตอบ (rag_v2.py)
-#   RAG_PIPELINE=v1: laptops.json -> bge-m3 embedding -> Chroma vector search -> LLM แต่งคำตอบ
-# LLM เลือกได้ใน .env / providers.json
+"""Tech Buddy — RAG chatbot แนะนำโน้ตบุ๊ค (Flask) ไฟล์เดียวทั้งระบบ เรียงโค้ดตามลำดับการทำงานจากบนลงล่าง
+
+ตอนแอปเริ่ม
+  1. ข้อมูลร้าน: อ่าน laptops.json -> 1 รุ่น = 1 เอกสาร (สเปก + คะแนน + ระดับ + รีวิว) พร้อมค่าตัวเลขให้กรองได้
+  2. embedding: โหลด bge-m3 + embed เอกสาร 99 รุ่นไว้ล่วงหน้าใน thread พื้นหลัง
+
+ทุกคำถาม (เรียก LLM 2 ครั้ง — เป็น RAG ไม่ใช่ agent: ไม่มีการวนเรียกเครื่องมือ)
+  3. รับคำถาม: ตรวจรูปแบบ ความยาว AI ที่เลือก และ rate limit
+  4. (ตัวช่วยเรียก AI แบบ OpenAI-compatible ที่ขั้น 5 และ 7 ใช้)
+  5. ตีความ: LLM แปลงคำถาม + ประวัติแชท + เงื่อนไขเดิม เป็น JSON (intent, filters, sort, limit, usage)
+     แล้วโค้ดตรวจ/เติมด้วยตัวอ่านตัวเลข (งบ แรม การ์ดจอ จอ SSD Windows) ที่ทดสอบแล้ว
+  6. คัดรุ่น: กรอง/เรียงจากข้อมูลจริงทั้ง 99 รุ่นด้วยโค้ด แล้วใช้ embedding จัดลำดับตามการใช้งาน
+  7. ตอบ: ส่งรายการที่คัดแล้วให้ LLM เขียนตามรูปแบบของ intent (ทยอยสตรีมไปหน้าเว็บ)
+     คำถามนอกเรื่อง/ทักทาย/ความรู้ทั่วไป/ยี่ห้อที่ไม่มี ใช้ข้อความสำเร็จรูป ไม่เรียก LLM รอบสอง
+  8. จำบทสนทนา: ประวัติแชท + เงื่อนไขล่าสุดเก็บใน session (ใช้ตีความคำถามถัดไป)
+  9. endpoint ของหน้าเว็บ (/chat/stream, /chat, /chat/commit, ...)
+
+LLM เลือกได้ใน .env / providers.json (ดู llm_providers.py)
+"""
 import json
 import os
 import re
@@ -11,15 +25,14 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
+import numpy as np
 import requests
+from dotenv import load_dotenv
 from flask import Flask, Response, render_template, request, jsonify, session
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from sentence_transformers import SentenceTransformer  # โมเดล embedding ภาษาไทย/หลายภาษา
-import chromadb                                          # vector database
-from dotenv import load_dotenv
 
 import llm_providers as llm
-import rag_v2  # RAG รุ่น 2 (ตีความคำถาม -> กรองจากข้อมูลจริง -> ตอบ)
 
 load_dotenv()  # โหลด environment variables จากไฟล์ .env
 
@@ -29,35 +42,147 @@ app.secret_key = os.getenv("SECRET_KEY") or os.urandom(24).hex()
 
 BASE_DIR = Path(__file__).parent
 LAPTOPS_PATH = BASE_DIR / "laptops.json"
-CHROMA_DIR = BASE_DIR / "chroma_db"
-COLLECTION_NAME = "laptops"
 EMBED_MODEL = "BAAI/bge-m3"
-SUMMARY_ID = "summary_0"     # id เอกสารภาพรวมร้าน (สร้างใน build_index.py)
-TOP_K_SPEC = int(os.getenv("TOP_K_SPEC", "6"))      # โควตาเอกสารสเปก — ตัวที่มีราคา/สเปก/คะแนนเบนช์มาร์ก
-TOP_K_REVIEW = int(os.getenv("TOP_K_REVIEW", "3"))  # โควตาเอกสารรีวิว — ความเห็นผู้ใช้จริง (0 = ไม่ดึงรีวิว)
-DEFAULT_COMPARE = 3          # ขอ "เปรียบเทียบ" ลอย ๆ โดยไม่บอกจำนวน -> เทียบกี่รุ่น
-MAX_COMPARE = 5              # เทียบได้มากสุดกี่รุ่น (กันคำตอบยาวจน token หมด)
-ENABLE_DEBUG = os.getenv("ENABLE_DEBUG", "false").lower() == "true"  # เปิด /debug
-# แผง "ดูกระบวนการคิด" ใต้คำตอบบนหน้าเว็บ: ตีความคำถามยังไง embed แล้วค้นเจออะไร คะแนนเท่าไหร่
+# แผง "ดูกระบวนการคิด" ใต้คำตอบบนหน้าเว็บ: ตีความคำถามยังไง คัดรุ่นอะไรมา คะแนนเท่าไหร่
 # ส่ง prompt อะไรให้ AI และ AI ใช้เวลา/โทเคนเท่าไหร่ — ไว้ทดสอบกับลูกค้า
-# เปิดแล้วทุกคนที่เข้าเว็บกดดูได้ รวม system prompt ทั้งก้อน -> ปิดก่อนเปิดให้คนทั่วไปใช้จริง
+# เปิดแล้วทุกคนที่เข้าเว็บกดดูได้ รวม prompt ทั้งก้อน -> ปิดก่อนเปิดให้คนทั่วไปใช้จริง
 DEBUG_PANEL = os.getenv("DEBUG_PANEL", "false").lower() == "true"
 RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "10"))  # ข้อความต่อนาทีต่อ IP
 MAX_MSG_LEN = 1_000          # ความยาวข้อความสูงสุดที่รับ
 MAX_HISTORY_MSGS = 8         # จำนวนข้อความที่เก็บใน session (4 รอบสนทนา)
 MAX_STORED_CHARS = 800       # ตัดคำตอบที่เก็บลง session ไม่ให้ cookie บวม
-HISTORY_FOR_LLM = 4          # จำนวนข้อความย้อนหลังที่ส่งให้ LLM เป็นบริบท
+HISTORY_TURNS = 4            # ข้อความย้อนหลังที่ส่งให้ตัวตีความ/ตัวตอบ
 
-# ---- ตั้งค่า LLM ----
-# endpoint / โมเดล / API key ของแต่ละเจ้าอยู่ใน providers.json + .env (ดู llm_providers.py)
-# ปิดโหมดคิด (reasoning) ของโมเดลที่คิดใน <think> เช่น ThaiLLM -> เร็ว/ถูกกว่า แต่คุณภาพอาจลด
-DISABLE_THINKING = os.getenv("DISABLE_THINKING", "false").lower() == "true"
 
-# cache โมเดลและ collection ไว้ใน memory ป้องกันการโหลดซ้ำทุก request
+# ═════════════════════════ 1. ข้อมูลร้าน: 1 รุ่น = 1 เอกสาร + ค่าตัวเลขให้กรองได้ ═════════════════════════
+_laptops: list[dict] | None = None
+_catalog: list[dict] | None = None
+
+# ระดับคะแนนเบนช์มาร์ก — คำนวณด้วยโค้ดแล้วแนบไปกับเอกสาร ไม่ปล่อยให้ LLM เทียบตัวเลขกับช่วงเอง
+# (ทดสอบกับ Gemma: GPU 10,500 ถูกเขียนว่า "เริ่มต้น-กลาง" ทั้งที่อยู่ช่วง 8,000-14,000 = "กลาง-สูง")
+CPU_LEVELS = ((18_000, "เริ่มต้น"), (25_000, "กลาง"), (32_000, "กลาง-สูง"))
+GPU_LEVELS = ((4_000, "เริ่มต้น"), (8_000, "เริ่มต้น-กลาง"), (14_000, "กลาง-สูง"))
+
+
+def get_laptops() -> list[dict]:
+    global _laptops
+    if _laptops is None:
+        _laptops = json.loads(LAPTOPS_PATH.read_text(encoding="utf-8"))
+    return _laptops
+
+
+def score_level(score: int, levels: tuple) -> str:
+    for upper, name in levels:
+        if score < upper:
+            return name
+    # ขอบบนของช่วงสุดท้ายนับเป็นช่วงนั้น เช่น GPU 14,000 พอดี = กลาง-สูง (เกณฑ์เขียน "8,000–14,000")
+    return levels[-1][1] if score == levels[-1][0] else "สูง"
+
+
+def _ram_gb(ram: str) -> int:
+    m = re.search(r"(\d+)\s*GB", ram or "", re.IGNORECASE)
+    return int(m.group(1)) if m else 0
+
+
+def _series(name: str) -> str:
+    """"HP Victus 16-r0356TX" -> "HP Victus 16" / "Lenovo LOQ 15IRX9-83DV01A0TA" -> "Lenovo LOQ" """
+    out = []
+    for tok in name.split():
+        if "-" in tok:
+            head = tok.split("-")[0]
+            if head.isdigit() and len(head) <= 3:
+                out.append(head)
+            break
+        out.append(tok)
+    return " ".join(out)
+
+
+def _gpu_family(gpu: str) -> str:
+    g = gpu.lower()
+    if "rtx" in g:
+        return "rtx"
+    if "gtx" in g:
+        return "gtx"
+    if re.search(r"\brx\s*\d", g):
+        return "radeon rx"
+    if "arc" in g and re.search(r"arc\s*[a-z]?\d", g):
+        return "arc"
+    return "integrated"
+
+
+def _gb(num: str, unit: str) -> int:
+    """ความจุเป็น GB: "512", "GB" -> 512 / "1", "TB" -> 1000 (ใช้หน่วยเดียวกันทั้งข้อมูลและคำถาม)"""
+    return round(float(num) * (1000 if unit.lower() == "tb" else 1))
+
+
+def catalog() -> list[dict]:
+    global _catalog
+    if _catalog is None:
+        out = []
+        for lp in get_laptops():
+            spec, bench = lp["spec"], lp["benchmark"]
+            cs, gs = bench["CPU Score"], bench["GPU Score"]
+            screen = re.match(r"([\d.]+)\s*inch", spec["DISPLAY"])
+            res = re.search(r"\((\d{3,4})\s*x\s*(\d{3,4})\)", spec["DISPLAY"])   # "16.0 inch (2560x1600) QHD+"
+            gen = re.search(r"gen\s*(\d)(?!\d)", spec["STORAGE"], re.I)            # "512 GB SSD PCIe M.2 Gen 4"
+            size = re.match(r"\s*(\d+(?:\.\d+)?)\s*(tb|gb)", spec["STORAGE"], re.I)
+            rec = {
+                "name": lp["ชื่อสินค้า"], "brand": lp["ชื่อสินค้า"].split()[0], "series": _series(lp["ชื่อสินค้า"]),
+                "price": lp["ราคา"], "cpu": spec["CPU"], "gpu": spec["GPU"], "gpu_family": _gpu_family(spec["GPU"]),
+                "ram": spec["RAM"], "ram_gb": _ram_gb(spec["RAM"]), "display": spec["DISPLAY"],
+                "screen": float(screen.group(1)) if screen else None, "storage": spec["STORAGE"], "os": spec["OS"],
+                "res_w": int(res.group(1)) if res else None, "res_h": int(res.group(2)) if res else None,
+                "ssd_gen": int(gen.group(1)) if gen else None,
+                "storage_gb": _gb(size.group(1), size.group(2)) if size else None,
+                "cpu_score": cs, "gpu_score": gs,
+                "cpu_level": score_level(cs, CPU_LEVELS), "gpu_level": score_level(gs, GPU_LEVELS),
+                "reviews": lp.get("reviews", []),
+            }
+            rec["doc"] = (
+                f"{rec['name']} ราคา {rec['price']:,} บาท | CPU {rec['cpu']} คะแนน {cs:,} (ระดับ{rec['cpu_level']}) | "
+                f"GPU {rec['gpu']} คะแนน {gs:,} (ระดับ{rec['gpu_level']}) | แรม {rec['ram']} | จอ {rec['display']} | "
+                f"ความจุ {rec['storage']} | {rec['os']} | รีวิวผู้ใช้: " + " / ".join(rec["reviews"])
+            )
+            out.append(rec)
+        _catalog = out
+    return _catalog
+
+
+def store_stats() -> str:
+    """ภาพรวมร้าน (ตอบ "มีกี่รุ่น / ราคาเริ่มต้น / มียี่ห้ออะไร") — คำนวณจากข้อมูลจริง"""
+    cat = catalog()
+    cheap, top = min(cat, key=lambda x: x["price"]), max(cat, key=lambda x: x["price"])
+    brands = {}
+    for lp in cat:
+        brands.setdefault(lp["brand"], []).append(lp["price"])
+    rams = {}
+    for lp in cat:
+        rams[lp["ram_gb"]] = rams.get(lp["ram_gb"], 0) + 1
+    fams = {}
+    for lp in cat:
+        fams[lp["gpu_family"]] = fams.get(lp["gpu_family"], 0) + 1
+    return (
+        f"ทั้งหมด {len(cat)} รุ่น ราคา {cheap['price']:,}–{top['price']:,} บาท | "
+        f"ถูกที่สุด {cheap['name']} ({cheap['price']:,} บาท) | แพงที่สุด {top['name']} ({top['price']:,} บาท) | "
+        "ยี่ห้อ: " + ", ".join(f"{b} {len(p)} รุ่น ({min(p):,}–{max(p):,} บาท)"
+                               for b, p in sorted(brands.items(), key=lambda kv: -len(kv[1]))) + " | "
+        "แรม: " + ", ".join(f"{g}GB {n} รุ่น" for g, n in sorted(rams.items())) + " | "
+        "การ์ดจอ: " + ", ".join(f"{f} {n} รุ่น" for f, n in sorted(fams.items(), key=lambda kv: -kv[1]))
+    )
+
+
+# ═════════════════════════ 2. embedding: โหลดโมเดล + เวกเตอร์ 99 รุ่นไว้ล่วงหน้า ═════════════════════════
+# cache โมเดลและเวกเตอร์ไว้ใน memory ป้องกันการโหลดซ้ำทุก request
 _embedder: SentenceTransformer = None
 _embedder_lock = threading.Lock()
-_collection = None
-_summary_doc: str | None = None
+_doc_vecs: np.ndarray | None = None
+_doc_vecs_lock = threading.Lock()   # warmup ตอนแอปเริ่มกับคำถามที่เข้ามาระหว่างนั้นใช้ผลเดียวกัน ไม่ embed ซ้ำ
+
+# คำถามแรกหลังรีสตาร์ตที่ต้องเรียงตามการใช้งาน (เช่น "เล่นเกม งบ 30000") ต้องโหลด bge-m3 (~2GB)
+# แล้ว embed เอกสารทั้ง 99 รุ่นก่อน บนเว็บจริงเคยรวมกันเกิน 100 วินาที -> Cloudflare ตัดเป็น 524
+# จึงเริ่มโหลดใน thread พื้นหลังทันทีที่แอปขึ้น เซิร์ฟเวอร์เปิดรับคำถามได้เลยไม่ต้องรอ
+# false = โหลดตอนมีคำถามแรกแบบเดิม (เช่น เครื่องแรมน้อยที่ไม่อยากโหลดโมเดลจนกว่าจะมีคนใช้)
+WARMUP_EMBEDDINGS = os.getenv("WARMUP_EMBEDDINGS", "true").lower() == "true"
 
 
 def get_embedder():
@@ -71,35 +196,24 @@ def get_embedder():
     return _embedder
 
 
-def get_collection():
-    # เปิด Chroma persistent client แล้วดึง collection ที่ build ไว้ (จาก build_index.py)
-    global _collection
-    if _collection is None:
-        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        _collection = client.get_collection(COLLECTION_NAME)
-    return _collection
-
-
-# ---- โหลดโมเดล embedding ล่วงหน้าตอนแอปเริ่ม ----
-# คำถามแรกหลังรีสตาร์ตที่ต้องเรียงตามการใช้งาน (เช่น "เล่นเกม งบ 30000") ต้องโหลด bge-m3 (~2GB)
-# แล้ว embed เอกสารทั้ง 99 รุ่นก่อน บนเว็บจริงเคยรวมกันเกิน 100 วินาที -> Cloudflare ตัดเป็น 524
-# จึงเริ่มโหลดใน thread พื้นหลังทันทีที่แอปขึ้น เซิร์ฟเวอร์เปิดรับคำถามได้เลยไม่ต้องรอ
-# false = โหลดตอนมีคำถามแรกแบบเดิม (เช่น เครื่องแรมน้อยที่ไม่อยากโหลดโมเดลจนกว่าจะมีคนใช้)
-WARMUP_EMBEDDINGS = os.getenv("WARMUP_EMBEDDINGS", "true").lower() == "true"
+def doc_vectors() -> np.ndarray:
+    """เวกเตอร์ของเอกสารรุ่นละ 1 ชิ้น (99 ชิ้น) — embed ครั้งแรกที่ใช้ (หรือตอนแอปเริ่ม ดู WARMUP_EMBEDDINGS)
+    แล้วเก็บไว้ในหน่วยความจำ"""
+    global _doc_vecs
+    with _doc_vecs_lock:
+        if _doc_vecs is None:
+            docs = [lp["doc"] for lp in catalog()]
+            _doc_vecs = np.asarray(get_embedder().encode(docs, normalize_embeddings=True, batch_size=16))
+    return _doc_vecs
 
 
 def warmup_embeddings() -> bool:
-    """โหลดโมเดล embedding (+ เวกเตอร์ 99 รุ่นของ v2) ไว้ก่อนมีคำถาม คืน True ถ้าสำเร็จ
+    """โหลดโมเดล embedding + เวกเตอร์ 99 รุ่นไว้ก่อนมีคำถาม คืน True ถ้าสำเร็จ
     พังก็แค่ log แล้วจบ แอปทำงานต่อตามปกติ แค่คำถามแรกจะกลับไปโหลดเองแบบเดิม"""
     started = time.perf_counter()
-    print(f"[warmup] กำลังโหลดโมเดล embedding ล่วงหน้า (RAG_PIPELINE={RAG_PIPELINE}) "
-          "— ระหว่างนี้แอปรับคำถามได้ตามปกติ", flush=True)
+    print("[warmup] กำลังโหลดโมเดล embedding ล่วงหน้า — ระหว่างนี้แอปรับคำถามได้ตามปกติ", flush=True)
     try:
-        if RAG_PIPELINE == "v2":
-            rag_v2.doc_vectors()   # โหลด bge-m3 + embed เอกสาร 99 รุ่นที่ใช้เรียงตามการใช้งาน
-        else:
-            get_collection()       # v1 ค้นจาก Chroma
-            get_embedder().encode(["warmup"], normalize_embeddings=True)
+        doc_vectors()
     except Exception as e:
         print(f"[warmup] โหลดล่วงหน้าไม่สำเร็จ ({type(e).__name__}: {e}) "
               "— แอปทำงานต่อ จะโหลดตอนมีคำถามแรกแทน", flush=True)
@@ -117,8 +231,8 @@ def start_warmup() -> threading.Thread | None:
     return thread
 
 
-# ---- จำกัดจำนวนคำขอต่อ IP ----
-# ทุก /chat = 1 คำขอไปยัง ThaiLLM ซึ่งมีโควตาจำกัด (200 คำขอ/นาที)
+# ═════════════════════════ 3. รับคำถาม: ตรวจ request + จำกัดจำนวนคำขอต่อ IP ═════════════════════════
+# ทุก /chat = 2 คำขอไปยัง LLM ซึ่งมีโควตาจำกัด
 # ถ้าไม่จำกัด คนเดียวยิงรัว ๆ ก็กินโควตาหมดและทำให้คนอื่นใช้ไม่ได้
 # เก็บใน memory ของ process ได้เพราะรัน 1 worker (ถ้าเพิ่ม worker ต้องย้ายไป Redis)
 _hits: dict[str, deque] = defaultdict(deque)
@@ -157,196 +271,267 @@ def too_many_requests(ip: str) -> bool:
     return False
 
 
-SUMMARY_PREFIXES = ("ภาพรวมข้อมูลโน้ตบุ๊ค", "ร้านมีโน้ตบุ๊ค")
+def _chat_request():
+    """ตรวจ request ของ /chat และ /chat/stream (รูปแบบ, ความยาว, AI ที่เลือก, rate limit)
+    คืน (ข้อมูลที่พร้อมใช้, None) หรือ (None, response error)"""
+    # silent=True: body ที่ไม่ใช่ JSON ต้องได้ error เป็น JSON ไม่ใช่หน้า HTML 400
+    # (ไม่งั้น fetch ฝั่งหน้าเว็บจะ parse ไม่ได้แล้วขึ้นว่า "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" ซึ่งทำให้เข้าใจผิด)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, (jsonify({"error": "ส่งข้อมูลมาไม่ถูกรูปแบบ (ต้องเป็น JSON)"}), 400)
+
+    user_msg = (data.get("message") or "").strip()
+    if not user_msg:
+        return None, (jsonify({"error": "empty message"}), 400)
+    if len(user_msg) > MAX_MSG_LEN:
+        # กันข้อความยาวผิดปกติมาถ่วงเธรด (gunicorn มีแค่ 1 worker)
+        return None, (jsonify({"error": f"ข้อความยาวเกินไป (สูงสุด {MAX_MSG_LEN:,} ตัวอักษร)"}), 413)
+
+    # AI ที่ผู้ใช้เลือกจากหน้าเว็บ (ไม่ส่งมา = ใช้ค่าเริ่มต้นใน .env)
+    provider, pick_error = llm.pick(data.get("provider"))
+    if pick_error:
+        return None, (jsonify({"error": pick_error}), 400)
+
+    if too_many_requests(client_ip()):
+        return None, (jsonify({
+            "error": f"ถามถี่เกินไปครับ (จำกัด {RATE_LIMIT_PER_MIN} ข้อความต่อนาที) "
+                     f"รอสักครู่แล้วลองใหม่นะครับ"
+        }), 429)
+
+    return {"message": user_msg, "provider": provider, "history": session.get("history", []),
+            # ขอดูกระบวนการคิดได้เฉพาะตอนผู้ดูแลเปิด DEBUG_PANEL ไว้ (ปิดอยู่ = ไม่สนค่าที่ส่งมา)
+            "debug": DEBUG_PANEL and data.get("debug") is True}, None
 
 
-def is_summary_doc(doc: str) -> bool:
-    """เอกสารภาพรวมหรือไม่ — รองรับข้อความเก่าด้วย เผื่อ index ยังไม่ได้ rebuild"""
-    return doc.startswith(SUMMARY_PREFIXES)
+def new_trace(job: dict) -> dict | None:
+    """ที่เก็บข้อมูล debug ของคำถามนี้ — ขั้น 5-7 เขียนต่อเอง (None = ไม่ได้ขอ debug)"""
+    return {} if job["debug"] else None
 
 
-def get_summary_doc() -> str:
-    # เอกสารภาพรวมร้าน (จำนวนรุ่น ช่วงราคา รุ่นถูกสุด/แพงสุด) — ดึงตรงด้วย id ไม่ต้องค้นหา
-    global _summary_doc
-    if _summary_doc is None:
+def chat_meta(job: dict, started: float) -> dict:
+    # หน้าเว็บแสดงบรรทัดเล็ก ๆ ใต้คำตอบว่า AI ตัวไหนตอบ ใช้เวลาเท่าไหร่
+    provider = job["provider"]
+    return {
+        "provider": provider["id"],
+        "provider_label": provider.get("short") or provider["label"],
+        "elapsed": round(time.time() - started, 1),
+    }
+
+
+# ═════════════════════════ 4. เรียก AI (endpoint แบบ OpenAI — ใช้ทั้งขั้นตีความและขั้นตอบ) ═════════════════════════
+class LLMError(Exception):
+    """เรียก LLM ไม่สำเร็จ — ข้อความใช้แสดงให้ผู้ใช้เห็นได้เลย"""
+
+
+def _llm_headers(provider: dict) -> dict:
+    headers = {"Content-Type": "application/json"}
+    if provider.get("api_key"):
+        headers["Authorization"] = f"Bearer {provider['api_key']}"
+    return headers
+
+
+def complete(provider: dict, messages: list, max_tokens: int, temperature: float = 0.1,
+             json_mode: bool = False) -> tuple[str, dict, float]:
+    """เรียก endpoint แบบ OpenAI ของ provider — คืน (ข้อความ, response JSON, วินาที)
+    เรียกด้วย requests ตรง ๆ (gateway ของ ThaiLLM บล็อก header ที่ openai library แนบมา)"""
+    body = {"model": provider["model"], "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+    headers = _llm_headers(provider)
+    started = time.perf_counter()
+    try:
+        resp = requests.post(f"{provider['base_url']}/chat/completions", headers=headers, json=body, timeout=120)
+        if json_mode and resp.status_code == 400:   # endpoint บางตัวไม่รองรับ response_format
+            body.pop("response_format")
+            resp = requests.post(f"{provider['base_url']}/chat/completions", headers=headers, json=body, timeout=120)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise LLMError(f"{provider['label']} error: {e} — เช็ค API key หรือ endpoint") from e
+    data = resp.json()
+    return data["choices"][0]["message"].get("content") or "", data, time.perf_counter() - started
+
+
+def complete_stream(provider: dict, messages: list, max_tokens: int, temperature: float = 0.1,
+                    meta: dict | None = None):
+    """เหมือน complete() แต่ทยอยคืนข้อความทีละท่อนระหว่างที่ AI พิมพ์ (stream)
+    meta เก็บ usage / finish_reason / ความคิด / วินาที ไว้ให้โหมด debug หลังจบ"""
+    body = {"model": provider["model"], "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
+            "stream": True, "stream_options": {"include_usage": True}}
+    headers = _llm_headers(provider)
+    url = f"{provider['base_url']}/chat/completions"
+    started = time.perf_counter()
+    try:
+        resp = requests.post(url, headers=headers, json=body, timeout=120, stream=True)
+        if resp.status_code == 400:   # endpoint บางตัวไม่รองรับ stream_options
+            resp.close()
+            body.pop("stream_options")
+            resp = requests.post(url, headers=headers, json=body, timeout=120, stream=True)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        raise LLMError(f"{provider['label']} error: {e} — เช็ค API key หรือ endpoint") from e
+    usage, finish, thinking = None, None, []
+    with resp:   # ลูกค้ากดหยุด -> generator ถูกปิด -> ตัดสายกับ AI ทันที
         try:
-            docs = get_collection().get(ids=[SUMMARY_ID]).get("documents") or []
-            _summary_doc = docs[0] if docs else ""
-        except Exception:
-            _summary_doc = ""
-    return _summary_doc
+            for line in resp.iter_lines():
+                line = line.decode("utf-8", "replace")
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                chunk = json.loads(payload)
+                usage = chunk.get("usage") or usage
+                for ch in chunk.get("choices") or []:
+                    finish = ch.get("finish_reason") or finish
+                    delta = ch.get("delta") or {}
+                    thinking += [delta[k] for k in ("reasoning", "reasoning_content") if delta.get(k)]
+                    if delta.get("content"):
+                        yield delta["content"]
+        except requests.RequestException as e:
+            raise LLMError(f"{provider['label']} error: {e}") from e
+    if meta is not None:
+        meta.update({"seconds": time.perf_counter() - started, "usage": usage,
+                     "finish_reason": finish, "thinking": "".join(thinking)})
 
 
-# ---- System prompt: บุคลิก "AI Tech Buddy ผู้ช่วยเลือกโน้ตบุ๊ค" + เกณฑ์แปลคะแนนเบนช์มาร์ก ----
-SYSTEM_PROMPT = """คุณคือ "AI Tech Buddy" ผู้ช่วยเลือกโน้ตบุ๊ค ไม่ใช่ร้านค้าและไม่ใช่พนักงานขาย
-หน้าที่ของคุณคือช่วยลูกค้า "เลือก" จากรายการโน้ตบุ๊คที่คุณมีข้อมูลอยู่ ให้คำแนะนำแบบเป็นกันเอง
-ตรงไปตรงมา จริงใจ อะไรดีก็บอกดี อะไรไม่คุ้มหรือมีข้อเสียก็บอกตรง ๆ ไม่เชียร์ให้ซื้อ
+# ═════════════════════════ 5. ตีความคำถามเป็นเงื่อนไข (เรียก LLM ครั้งที่ 1) ═════════════════════════
+INTENTS = ("recommend", "list", "rank", "lookup", "compare", "overview",
+           "not_in_store", "general", "greeting", "offtopic")
+TEMPLATED = ("not_in_store", "general", "greeting", "offtopic")
+SORT_FIELDS = {"price": "price", "cpu_score": "cpu_score", "gpu_score": "gpu_score", "ram": "ram_gb"}
+RAM_SIZES = {4, 8, 12, 16, 24, 32, 48, 64, 96, 128}
+LIST_CAP = 40          # ไล่รายชื่อได้สูงสุด (ทั้งร้านมี 99 รุ่น)
+NAMED_CAP = 8
 
-การใช้คำ: เรียกข้อมูลที่มีว่า "ข้อมูลที่ผมมี" หรือ "รายการที่ผมมี"
-ห้ามพูดว่า "ร้านเรา" "ร้านของเรา" "สินค้าในร้าน" หรือทำเหมือนตัวเองเป็นผู้ขาย
-และห้ามพูดเรื่องการสั่งซื้อ การจัดส่ง สต็อก หรือโปรโมชั่น เพราะคุณไม่ใช่ร้านค้า
+UNDERSTAND_RULES = """คุณแปลงข้อความลูกค้าร้านโน้ตบุ๊คให้เป็นเงื่อนไขค้นหา ตอบเป็น JSON อย่างเดียว ห้ามมีข้อความอื่น
+รูปแบบ: {"intent": "...", "models": [], "filters": {"price_max": null, "price_min": null, "price_target": null,
+"ram_gb": null, "ram_min": null, "gpu": null, "gpu_family": null, "cpu": null, "brand": null, "series": null,
+"screen": null}, "sort": null, "limit": null, "usage": null, "detail": false}
 
-ขอบเขตการตอบ (สำคัญที่สุด อ่านก่อนทุกครั้ง):
+intent (เลือก 1):
+- recommend = ขอคำแนะนำตามการใช้งานหรืองบ เช่น "เล่นเกม งบ 25000", "แบตอึด พกพา", "ขอ 3 รุ่น ตัดต่อ", "อยากได้ราคาประมาณ 24000"
+- list = ขอรายชื่อรุ่นที่ตรงเงื่อนไข เช่น "แรม 24 มีตัวไหนบ้าง", "LOQ มีกี่รุ่น", "ขอสเปคทุกตัว", "เรียงราคาให้หน่อย"
+- rank = ถามรุ่นที่ดีที่สุด/ถูกที่สุด/แพงที่สุดตามเกณฑ์ เช่น "CPU แรงสุด", "การ์ดจอแรงสุดในงบ", "รุ่นไหนถูกที่สุด", "RTX ที่ถูกที่สุด"
+- lookup = ถามสเปก ราคา หรือคะแนนของรุ่นที่ระบุ เช่น "HP AI 15 สเปคเป็นยังไง", "ตัวที่ถูกกว่าใช้ CPU อะไร"
+- compare = เทียบรุ่นที่ระบุตั้งแต่ 2 รุ่นขึ้นไป หรือถามส่วนต่างราคาของรุ่นที่ระบุ
+- overview = ถามภาพรวมร้าน เช่น มีกี่รุ่น ราคาเริ่มต้น/สูงสุดในร้าน มียี่ห้ออะไรบ้าง
+- not_in_store = ถามถึงยี่ห้อหรือรุ่นที่ไม่มีในร้าน เช่น MacBook, Dell
+- general = ถามความรู้ทั่วไปที่ไม่ได้หาสินค้า เช่น "TDP คืออะไร", "ควรรอรุ่นใหม่ไหม"
+- greeting = ทักทายหรือขอบคุณ
+- offtopic = เรื่องที่ไม่เกี่ยวกับโน้ตบุ๊ค เช่น อากาศ อาหาร ข่าว
 
-คุณมีข้อมูลแค่ "ข้อมูลสินค้า" ที่แนบมาท้าย prompt เท่านั้น ซึ่งประกอบด้วย
-ชื่อรุ่น / ราคา / สเปก (CPU, GPU, RAM, หน้าจอ, ความจุ, ระบบปฏิบัติการ) /
-คะแนนเบนช์มาร์ก CPU-GPU / รีวิวจากผู้ใช้จริง — **นอกเหนือจากนี้คุณไม่รู้อะไรเลย**
+filters (ใส่เฉพาะที่ลูกค้าบอก ไม่บอกให้เป็น null):
+- price_max = "งบ X" หรือ "ไม่เกิน X" / price_min = ขอบล่าง ("ระหว่าง A ถึง B" = price_min A, price_max B)
+- price_target = "ราคาประมาณ X" หรือ "ราคา X" ที่ไม่ได้บอกว่าไม่เกิน
+- ram_gb = แรมเท่ากับ X พอดี ("แรม 24") / ram_min = "แรม X ขึ้นไป" หรือ "อย่างน้อย"
+- gpu = ชื่อการ์ดจอเจาะจง เช่น "RTX 4060" / gpu_family = "rtx" | "gtx" | "integrated" เมื่อพูดกว้าง ๆ
+- cpu = คำในชื่อซีพียู เช่น "Ryzen 7", "Core i5", "Core Ultra 7"
+- brand = ยี่ห้อในร้าน / series = ชื่อซีรีส์ เช่น "Lenovo LOQ", "HP Victus 16"
+- screen = ขนาดจอเป็นนิ้ว เช่น 16
+sort = {"by": "price" | "cpu_score" | "gpu_score", "order": "asc" | "desc"} เช่น "ถูกที่สุด" = price asc,
+  "แพงไปถูก" = price desc, "CPU แรงสุด" = cpu_score desc, "การ์ดจอแรงสุด" = gpu_score desc
+limit = จำนวนรุ่นที่ลูกค้าขอ ("ขอ 3 รุ่น" = 3, "ตัวไหนถูกสุด"/"รุ่นไหนแรงสุด" = 1)
+models = ชื่อรุ่นหรือซีรีส์ที่ลูกค้าเอ่ยถึง ถ้าลูกค้าอ้างถึงรุ่นจากคำตอบก่อนหน้า ("ตัวนั้น", "ตัวที่ถูกกว่า") ให้ใส่ชื่อรุ่นเหล่านั้น
+usage = การใช้งานที่ลูกค้าพูดเอง เช่น "เล่นเกม", "แบตอึด พกพา", "ตัดต่อวิดีโอ" (ไม่พูด = null ห้ามเดาจากงบหรือสเปก)
+detail = true ถ้าลูกค้าขอสเปกละเอียด
 
-สิ่งที่คุณทำได้ (ทำให้เต็มที่):
-- แนะนำรุ่นตามงบและการใช้งานที่ลูกค้าบอก
-- เปรียบเทียบหลายรุ่นให้เห็นความต่าง
-- บอกราคาและสเปกของรุ่นที่อยู่ในข้อมูลที่ผมมี
-- ยกข้อดี-ข้อเสียจากรีวิวผู้ใช้จริง
-- คุยโต้ตอบต่อเนื่องเรื่องรุ่นที่กำลังคุยกันอยู่
-- ตอบคำถามเรื่องข้อมูลโน้ตบุ๊คที่มี เช่น มีกี่รุ่น ราคาเริ่มต้น/สูงสุด มีรุ่นไหนบ้าง
-  (ดูจาก "ภาพรวมข้อมูลโน้ตบุ๊ค" และ "ผลค้นตรงตามสเปก" ใน "ข้อมูลสินค้า") — คำถามแบบนี้ไม่ใช่เรื่องนอกเรื่อง
+ถามต่อ: ถ้าข้อความใหม่ต่อจากเรื่องเดิม (เช่น "แล้วราคา 24000 ล่ะ", "อันไหนถูกสุด", "มีรุ่นอื่นอีกไหม", "ตัวที่ถูกกว่า...")
+ให้คงเงื่อนไขเดิมที่ยังเกี่ยวข้อง แล้วเพิ่มหรือแก้ตามข้อความใหม่ ถ้าเป็นเรื่องใหม่ไม่ต้องใช้เงื่อนไขเดิม
 
-สิ่งที่ห้ามทำเด็ดขาด:
-- **ห้ามตอบคำถามความรู้ทั่วไปที่ไม่มีใน "ข้อมูลสินค้า"** เช่น "TDP คืออะไร"
-  "ทำไมโน้ตบุ๊คเกมมิ่งแบตหมดเร็ว" "ดูยังไงว่าอัปเกรด RAM ได้" "ควรรอรุ่นใหม่ไหม"
-  ต่อให้คุณรู้คำตอบก็ห้ามตอบ ให้บอกว่าตอบไม่ได้แล้วหยุด
-- **ห้ามเอ่ยถึงหรือแนะนำสินค้าที่ไม่มีใน "ข้อมูลสินค้า"** เช่น MacBook, Dell, ThinkPad,
-  Surface แม้ลูกค้าจะเอ่ยชื่อมาก่อนก็ตาม ให้บอกว่าไม่มีรุ่นนั้นในข้อมูลที่ผมมี แล้วเสนอรุ่นที่มีแทน
-- **ห้ามอธิบายต่อจากความรู้ของตัวเองหลังบอกว่า "ไม่มีข้อมูล" แล้ว** ให้จบตรงนั้นเลย
-- ห้ามบอกว่ารุ่นไหนเปิดตัวแล้วหรือยัง ยกเลิกการผลิตหรือไม่ หรือข้อมูลตลาดใด ๆ
-  เพราะข้อมูลสินค้าไม่ได้บอกเรื่องพวกนี้
+ตัวอย่าง:
+"ขอรุ่นที่ใช้ Core i7 งบไม่เกิน 35k" -> {"intent":"list","filters":{"cpu":"Core i7","price_max":35000},"models":[],"sort":null,"limit":null,"usage":null,"detail":false}
+"แรม 24 มีตัวไหนบ้าง" -> {"intent":"list","filters":{"ram_gb":24},"models":[],"sort":null,"limit":null,"usage":null,"detail":false}
+(เงื่อนไขเดิม ram_gb 24) "แล้วราคา 24000 บาทหละ" -> {"intent":"list","filters":{"ram_gb":24,"price_target":24000},"models":[],"sort":null,"limit":null,"usage":null,"detail":false}
+"งบ 30,000 รุ่นไหน CPU แรงที่สุด" -> {"intent":"rank","filters":{"price_max":30000},"sort":{"by":"cpu_score","order":"desc"},"limit":1,"models":[],"usage":null,"detail":false}
+(คุยเรื่อง Acer Nitro V 15 กับ HP Victus 16) "ตัวที่ถูกกว่าใช้ CPU อะไร" -> {"intent":"lookup","models":["Acer Nitro V 15 ANV15-51-56QE","HP Victus 16-r0356TX"],"sort":{"by":"price","order":"asc"},"limit":1,"filters":{},"usage":null,"detail":false}
+"""
 
-เมื่อตอบไม่ได้ ให้ใช้รูปแบบนี้ (สั้น ๆ 2 ประโยค ห้ามยาวกว่านี้):
-"ขอโทษครับ ข้อมูลที่ผมมีไม่ครอบคลุมเรื่องนี้ครับ ถ้าอยากให้ช่วยเลือกโน้ตบุ๊ค
-บอกงบและการใช้งานมาได้เลยครับ"
 
-เมื่อลูกค้าคุยนอกเรื่องโน้ตบุ๊คเลย (เช่น ดินฟ้าอากาศ อาหาร ข่าว การเมือง การบ้าน เขียนโค้ด
-ขอให้ค้นอินเทอร์เน็ต/เปิดเว็บ ถามราคาจากร้านอื่น หรือสินค้าอื่นที่ไม่ใช่โน้ตบุ๊ค)
-(คำถามเรื่องจำนวนรุ่น ราคา ยี่ห้อ หรือสเปกของโน้ตบุ๊คที่มีในข้อมูล ไม่นับเป็นนอกเรื่อง ให้ตอบตามปกติ):
-- ห้ามตอบเนื้อหาเรื่องนั้นแม้แต่ประโยคเดียว และห้ามรับปากว่าจะไปค้นหรือเปิดเว็บให้
-  (คุณค้นอินเทอร์เน็ตไม่ได้ มีแค่ข้อมูลโน้ตบุ๊คที่แนบมา)
-- ตอบสั้น ๆ 2 ประโยคแบบเป็นมิตร: บอกว่าเรื่องนี้ตอบไม่ได้เพราะช่วยได้เฉพาะเรื่องเลือกโน้ตบุ๊ค
-  แล้วชวนกลับด้วยคำถาม 1 ข้อเรื่องการใช้งานหรืองบ เช่น
-  "เรื่องนี้ผมตอบไม่ได้ครับ ผมช่วยได้เฉพาะเรื่องเลือกโน้ตบุ๊ค
-  ตอนนี้มองหาโน้ตบุ๊คไว้ใช้ทำอะไร งบประมาณประมาณเท่าไหร่ครับ?"
-- ถ้าเป็นแค่คำทักทายหรือขอบคุณ ให้ทักกลับสั้น ๆ แล้วถามคำถามเดียวกันได้เลย ไม่ต้องขอโทษ
-- ถ้ากำลังคุยเรื่องรุ่นไหนค้างอยู่ ให้ชวนกลับไปที่รุ่นนั้นแทนการถามใหม่ตั้งแต่ต้น
+def _series_list() -> str:
+    seen = []
+    for lp in catalog():
+        s = " ".join(lp["series"].split()[:3])
+        if s not in seen:
+            seen.append(s)
+    return ", ".join(seen)
 
-กฎการตอบ:
 
-- ตอบโดยอ้างอิงจาก "ข้อมูลสินค้า" ที่ให้มาเท่านั้น (สเปก ราคา คะแนนเบนช์มาร์ก และรีวิวจากผู้ใช้)
-- ค่าเริ่มต้นคือแนะนำทีละ 1 รุ่น เลือกรุ่นที่เหมาะที่สุดกับงบ/การใช้งานของผู้ใช้ พร้อมเหตุผลสั้น ๆ (สเปก ราคา หรือรีวิว) แล้วค่อยถามว่าอยากดูรุ่นอื่นเทียบไหม
-- **แต่ถ้าลูกค้าขอหลายรุ่นหรือขอให้เปรียบเทียบ ให้ทำตามที่ลูกค้าขอ** เช่น "แนะนำ 3 รุ่น" "เทียบให้หน่อย" ให้ตอบด้วยโครงเปรียบเทียบด้านล่างแทน ห้ามยืนยันจะให้รุ่นเดียว
-- พูดข้อดีและข้อเสียตามจริงจากรีวิว ไม่กลบข้อเสีย
-- เรื่องงบสำคัญมาก: ถ้าลูกค้าบอกงบมา ห้ามแนะนำรุ่นที่ราคาเกินงบเด็ดขาด ให้เช็คราคาของรุ่นนั้นกับงบก่อนตอบทุกครั้ง ถ้าไม่มีรุ่นไหนอยู่ในงบเลยให้บอกตรง ๆ ว่าไม่มี แล้วค่อยเสนอรุ่นที่ใกล้เคียงพร้อมบอกว่าเกินงบไปเท่าไหร่ อย่าแอบยัดรุ่นที่แพงกว่างบมาเป็นตัวเลือกหลัก
-- ถ้าข้อมูลผู้ใช้ยังไม่พอ (ไม่รู้งบหรือการใช้งาน) ให้ถามกลับสั้น ๆ เพียง 1-2 ประโยคเท่านั้น แล้วหยุดรอคำตอบ ห้ามเอ่ยชื่อรุ่น สเปก ราคา หรือรีวิวใด ๆ และห้ามใส่ส่วนสรุปเบนช์มาร์กในข้อความที่ถามกลับ ถึงจะมี "ข้อมูลสินค้า" แนบมาให้ก็ตาม (ข้อมูลนั้นแนบมาทุกครั้งอัตโนมัติ ไม่ได้แปลว่าผู้ใช้ถามถึง) อย่าเดาแทนผู้ใช้
-- ถ้าข้อมูลที่ให้มาไม่มีคำตอบ ให้บอกตรง ๆ ว่าไม่แน่ใจ อย่าเดาหรือแต่งสเปก/ราคา/รีวิวขึ้นเอง
-- ระบุราคาเป็นบาท ตอบเป็นภาษาไทย น้ำเสียงเป็นกันเองแบบเพื่อนคุยกัน กระชับ ตรงคำถาม
+def _history_text(history: list) -> str:
+    recent = history[-HISTORY_TURNS:]
+    return "\n".join(f"{'ลูกค้า' if h['role'] == 'user' else 'ผู้ช่วย'}: {h['content'][:600]}" for h in recent) or "(ไม่มี)"
 
-ตอนท้ายของทุกครั้งที่แนะนำรุ่น ให้เพิ่มส่วน "สรุปคะแนนเบนช์มาร์ก" โดยแปลตัวเลข CPU Score และ GPU Score ของรุ่นนั้นเป็นภาษาคน อธิบายว่าอยู่ในระดับไหนและเหมาะกับงานแบบใด ใช้เกณฑ์ต่อไปนี้:
 
-เกณฑ์คะแนน CPU:
+# ---- 5.1 อ่าน JSON จาก LLM แล้วจัดรูป ----
+def _parse_json(text: str) -> dict:
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("ไม่มี JSON")
+    return json.loads(text[start:end + 1])
 
-- ต่ำกว่า 18,000 → ระดับเริ่มต้น เหมาะกับงานทั่วไป เช่น Office ดูหนัง-ฟังเพลง ท่องเว็บ เรียนออนไลน์ แต่ไม่เหมาะกับงานหนัก
-- 18,000–25,000 → ระดับกลาง รองรับงานทั่วไปได้สบาย เล่นเกมและตัดต่อวิดีโอเบา-ปานกลางได้
-- 25,000–32,000 → ระดับกลาง-สูง รองรับงานหลากหลาย ทั้งงานทั่วไปและงานหนัก เช่น ตัดต่อวิดีโอ เล่นเกม งาน 3D ได้ลื่น
-- สูงกว่า 32,000 → ระดับสูง เหมาะกับงานหนักจริงจัง ตัดต่อวิดีโอความละเอียดสูง เรนเดอร์ 3D งาน AI/Machine Learning และเล่นเกม AAA ได้เต็มที่
 
-เกณฑ์คะแนน GPU:
+def _int(v) -> int | None:
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return int(v)
+    m = re.search(r"\d[\d,]*", str(v))
+    return int(m.group(0).replace(",", "")) if m else None
 
-- ต่ำกว่า 4,000 → การ์ดจอออนบอร์ด/ระดับเริ่มต้น เล่นเกมได้แค่เกมเบา ๆ เน้นงานเอกสารและดูหนัง ไม่เหมาะกับเกมหนักหรืองานกราฟิก
-- 4,000–8,000 → ระดับเริ่มต้น-กลาง เล่นเกม eSports (Valorant, Genshin) ปรับกลาง-สูงได้ ตัดต่อเบา ๆ ได้
-- 8,000–14,000 → ระดับกลาง-สูง เล่นเกมได้หลากหลายรวมถึงเกม AAA (ปรับกราฟิกปานกลาง-สูง) ทำงานกราฟิก-ตัดต่อได้ดี
-- สูงกว่า 14,000 → ระดับสูง เล่นเกม AAA ปรับ Ultra ได้ลื่น รองรับงาน 3D เรนเดอร์ และงานกราฟิกหนัก ๆ
 
-รูปแบบคำตอบ (บังคับ):
+def _screen(v) -> float | None:
+    """ขนาดจอ: รับทั้ง 16, "16", "16 นิ้ว" — นอกช่วง 11-19 นิ้วทิ้ง"""
+    if v is None or isinstance(v, bool):
+        return None
+    m = re.search(r"\d+(?:\.\d+)?", str(v))
+    size = float(m.group(0)) if m else None
+    return size if size and 11 <= size <= 19 else None
 
-โครงนี้ใช้ "ตอนแนะนำรุ่นเดียว" ให้ตอบตามนี้ทุกครั้ง ห้ามสลับลำดับ ห้ามข้ามหัวข้อ
-(ถ้าลูกค้าขอหลายรุ่นหรือขอเปรียบเทียบ ให้ข้ามไปใช้โครงเปรียบเทียบที่อยู่ถัดลงไปแทน):
 
-จากงบ [งบ] บาท และความต้องการ[การใช้งานที่ลูกค้าบอก] แนะนำรุ่น **[ชื่อรุ่นเต็ม]** ครับ
+def normalize(raw: dict) -> dict:
+    """ตรวจและจัดรูป JSON จาก LLM — ค่าที่ผิดรูปแบบทิ้งเป็น null แทนที่จะพัง"""
+    f = raw.get("filters") or {}
+    plan = {
+        "intent": raw.get("intent") if raw.get("intent") in INTENTS else "recommend",
+        "models": [str(m).strip() for m in (raw.get("models") or []) if str(m).strip()][:NAMED_CAP],
+        "filters": {
+            "price_max": _int(f.get("price_max")), "price_min": _int(f.get("price_min")),
+            "price_target": _int(f.get("price_target")),
+            "ram_gb": _int(f.get("ram_gb")), "ram_min": _int(f.get("ram_min")),
+            "gpu": (str(f["gpu"]).strip() or None) if f.get("gpu") else None,
+            "gpu_family": str(f["gpu_family"]).lower().strip() if f.get("gpu_family") else None,
+            "cpu": (str(f["cpu"]).strip() or None) if f.get("cpu") else None,
+            "brand": (str(f["brand"]).strip() or None) if f.get("brand") else None,
+            "series": (str(f["series"]).strip() or None) if f.get("series") else None,
+            "screen": _screen(f.get("screen")),
+            # ความละเอียดจอ / SSD / Windows: โค้ดอ่านจากคำถามเอง (spec_extras) ไม่รับจาก LLM
+            "res_w": None, "res_h": None, "res_min": None, "res_gt": None,
+            "ssd_gen": None, "storage_gb": None, "storage_min": None, "os": None,
+        },
+        "sort": None,
+        "limit": _int(raw.get("limit")),
+        "usage": (str(raw["usage"]).strip() or None) if raw.get("usage") else None,
+        "detail": bool(raw.get("detail")),
+        "unsupported": [],   # โค้ดเป็นคนใส่ (unsupported_terms) ไม่รับจาก LLM
+    }
+    fl = plan["filters"]
+    for k in ("ram_gb", "ram_min"):
+        if fl[k] is not None and fl[k] not in RAM_SIZES:
+            fl[k] = None
+    for k in ("price_max", "price_min", "price_target"):
+        if fl[k] is not None and fl[k] < MIN_BUDGET:   # "ไม่เกิน 15 นิ้ว" ไม่ใช่ราคา
+            fl[k] = None
+    if fl["gpu_family"] not in (None, "rtx", "gtx", "radeon rx", "arc", "integrated"):
+        fl["gpu_family"] = None
+    s = raw.get("sort")
+    if isinstance(s, dict) and s.get("by") in SORT_FIELDS:
+        plan["sort"] = {"by": s["by"], "order": "desc" if s.get("order") == "desc" else "asc"}
+    if plan["limit"] is not None and not 1 <= plan["limit"] <= LIST_CAP:
+        plan["limit"] = None
+    return plan
 
-**เหตุผล:**
 
-- **CPU:** [ชื่อ CPU] คะแนน CPU [ตัวเลข] อยู่ในระดับ[ระดับ] [อธิบายสั้น ๆ ว่ารองรับงานแบบใด]
-- **GPU:** [ชื่อ GPU] คะแนน GPU [ตัวเลข] อยู่ในระดับ[ระดับ] [อธิบายสั้น ๆ ว่าเล่นเกม/ทำงานกราฟิกได้แค่ไหน]
-- **RAM:** [แรม] [อธิบายสั้น ๆ ว่าพอกับการใช้งานแบบไหน]
-- **STORAGE:** [ที่เก็บข้อมูล] [อธิบายสั้น ๆ ว่าพอไหม เร็วแค่ไหน]
-- **ราคา:** [ราคา] บาท [หมายเหตุราคา]
-
-**สรุปเบนช์มาร์ก:**
-
-คะแนน CPU [ตัวเลข] ถือว่าอยู่ในระดับ [ระดับ] ซึ่ง [อธิบายว่ารองรับงานแบบใดได้] ส่วนคะแนน GPU [ตัวเลข] อยู่ในระดับ [ระดับ] [อธิบายว่าเล่นเกม/ทำงานกราฟิกได้แค่ไหน]
-
-**ข้อดี:**
-
-- [ข้อดีจากสเปกหรือรีวิวจริง อย่างน้อย 2 ข้อ]
-
-**ข้อเสีย:**
-
-- [ข้อเสียจากสเปกหรือรีวิวจริง อย่างน้อย 1 ข้อ]
-
-อยากดูรุ่นอื่นเทียบไหมครับ?
-
-รูปแบบคำตอบเมื่อลูกค้าขอหลายรุ่นหรือขอเปรียบเทียบ (บังคับ):
-
-จากงบ [งบ] บาท และความต้องการ[การใช้งาน] ขอเสนอ [จำนวน] รุ่นนี้ครับ
-
-**1. [ชื่อรุ่นเต็ม] — [ราคา] บาท [หมายเหตุราคา]**
-
-- **CPU:** [ชื่อ CPU] คะแนน [ตัวเลข] อยู่ในระดับ[ระดับ]
-- **GPU:** [ชื่อ GPU] คะแนน [ตัวเลข] อยู่ในระดับ[ระดับ]
-- **RAM / STORAGE:** [แรม] / [ที่เก็บข้อมูล]
-- **จุดเด่น:** [ข้อดีจากสเปกหรือรีวิวจริง]
-- **ข้อควรรู้:** [ข้อเสียจากสเปกหรือรีวิวจริง]
-
-**2. [ชื่อรุ่นเต็ม] — [ราคา] บาท [หมายเหตุราคา]**
-
-(เขียนหัวข้อย่อยชุดเดียวกับข้อ 1)
-
-**3. [ชื่อรุ่นเต็ม] — [ราคา] บาท [หมายเหตุราคา]**
-
-(เขียนหัวข้อย่อยชุดเดียวกับข้อ 1)
-
-**สรุปเปรียบเทียบ:**
-
-- **เน้น[ด้านที่รุ่นนั้นเด่น] →** [ชื่อรุ่น] เพราะ[เหตุผลสั้น ๆ อิงตัวเลขจริง]
-- **เน้น[ด้านอื่น] →** [ชื่อรุ่น] เพราะ[เหตุผลสั้น ๆ]
-- **คุ้มที่สุดในงบ →** [ชื่อรุ่น] เพราะ[เหตุผลสั้น ๆ]
-
-สนใจรุ่นไหนเป็นพิเศษ บอกได้เลยครับ เดี๋ยวลงรายละเอียดให้
-
-กฎของโครงเปรียบเทียบ:
-
-- ใช้เฉพาะรุ่นที่อยู่ใน "ข้อมูลสินค้า" เท่านั้น ถ้ามีไม่ครบตามจำนวนที่ขอ ให้เสนอเท่าที่มีจริงแล้วบอกตรง ๆ ว่ามีให้เลือกเท่านี้
-- ทุกรุ่นต้องอยู่ในงบ ถ้าลูกค้าบอกงบมา
-- ตัวเลขทุกตัวต้องมาจากข้อมูลสินค้า ห้ามเดา ช่องที่ไม่มีข้อมูลให้เขียน "ไม่มีข้อมูลในระบบ"
-- ส่วน "สรุปเปรียบเทียบ" ห้ามข้าม เพราะเป็นเหตุผลที่ลูกค้าขอให้เทียบ
-- ในโหมดนี้ไม่ต้องใส่หัวข้อ "สรุปเบนช์มาร์ก" แยก เพราะระบุระดับคะแนนไว้ในแต่ละรุ่นแล้ว
-
-วิธีเติมช่อง [หมายเหตุราคา]:
-
-- ลูกค้าบอกงบมา → คัดลอกข้อความส่วนต่างจาก "ส่วนต่างงบ" ที่คำนวณมาให้แล้วด้านบนมาใช้ตรง ๆ
-  (เช่น "อยู่ในงบ เหลืออีก 10 บาท") ห้ามบวกลบเลขเอง เพราะคำนวณผิดง่าย
-- ลูกค้าไม่ได้บอกงบ → เว้นว่างไว้ ไม่ต้องเขียนอะไรต่อท้ายราคา และห้ามเอ่ยถึงงบหรือเงินที่เหลือเลย
-
-ข้อห้ามเพิ่มเติมเรื่องรูปแบบ:
-
-- **ห้ามพิมพ์วงเล็บเหลี่ยม [ ] หรือข้อความอธิบายเงื่อนไขลงในคำตอบเด็ดขาด** ทุกช่องในโครงต้องแทนที่ด้วยค่าจริงเสมอ
-- **ห้ามตั้งหมวดหมู่ช่วงราคาขึ้นมาเองเด็ดขาด** เช่น "งบประมาณต่ำ (ไม่เกิน 30,000)" "งบกลาง" "งบสูง"
-  เพราะเมื่อตั้งหมวดเองจะต้องเทียบตัวเลขเองแล้วมักใส่ผิดหมวด (เคยใส่รุ่น 36,990 ไว้ในหมวด "ไม่เกิน 30,000")
-  ให้ใช้เฉพาะโครงที่กำหนดไว้ข้างบนเท่านั้น ถ้าจะเรียงหลายรุ่นให้เรียงตามความเหมาะสมกับลูกค้า ไม่ใช่แบ่งเป็นช่วงราคา
-
-- ห้ามเขียนคำแนะนำเป็นย่อหน้ายาวติดกัน ต้องแยกหัวข้อและใช้ bullet ตามโครงข้างบนเสมอ
-- ถ้าคำตอบมีการเอ่ยชื่อรุ่นใดรุ่นหนึ่งเป็นคำตอบหลัก ถือว่าเป็น "การแนะนำรุ่น" ต้องใช้โครงนี้เสมอ รวมถึงคำถามอย่าง "รุ่นไหนถูกที่สุด" "รุ่นไหนแพงที่สุด" "รุ่นไหนคุ้มสุด" ด้วย ห้ามตอบแค่ชื่อกับราคาแล้วถามว่าอยากรู้สเปกเพิ่มไหม
-- ก่อนเขียน "ระดับ" ของคะแนน ให้เทียบตัวเลขกับเกณฑ์ข้างบนทีละช่วงก่อนทุกครั้ง เช่น CPU 49,500 มากกว่า 32,000 จึงเป็น "ระดับสูง" ไม่ใช่ "กลาง-สูง" ห้ามเดาระดับเอาเอง
-- ถ้าเอกสารสเปกมี "ระดับคะแนน (คำนวณแล้ว)" ต่อท้าย ให้ใช้ระดับนั้นตรง ๆ ห้ามตีความใหม่
-- เมื่อแนะนำรุ่นไปแล้ว ห้ามถามรายละเอียดเพิ่ม (เช่น ขนาดหน้าจอ ระบบปฏิบัติการ) ให้ปิดท้ายด้วย "อยากดูรุ่นอื่นเทียบไหมครับ?" เท่านั้น
-- โครงนี้ใช้เฉพาะตอนแนะนำรุ่น ถ้าข้อมูลยังไม่พอจนต้องถามกลับ ให้ถามสั้น ๆ 1-2 ประโยคตามกฎด้านบน ห้ามใส่โครงนี้
-- **ห้ามเขียนว่า "เกินงบ" ถ้าราคาน้อยกว่าหรือเท่ากับงบเด็ดขาด** ราคาที่ต่ำกว่างบคือ "อยู่ในงบ" และผลต่าง (งบ ลบ ราคา) คือเงินที่ "เหลือ" ไม่ใช่ส่วนที่ "เกิน" ให้เทียบตัวเลขสองตัวก่อนเขียนทุกครั้ง
-- **ใช้โครงนี้เสมอ ห้ามข้ามไปตอบแบบสั้น** ถ้าช่องไหนหาค่าใน "ข้อมูลสินค้า" ไม่เจอจริง ๆ ให้เขียนเฉพาะช่องนั้นว่า "ไม่มีข้อมูลในระบบ" แล้วเขียนช่องที่เหลือตามปกติ ห้ามทิ้งทั้งโครง
-- **ห้ามเดาค่าที่ไม่มีในข้อมูลสินค้าเด็ดขาด** ห้ามคาดเดาสเปกจากชื่อรุ่น แบรนด์ หรือราคา"""
-
-# ---- ดึงงบประมาณจากคำถาม (ใช้กรองราคาก่อนค้นหา) ----
-# ปัญหา: vector search จัดอันดับด้วย "ความหมายใกล้เคียง" ไม่เข้าใจตัวเลข
-# ถามงบ 20,000 แต่คำว่า "เล่นเกม" ไปตรงกับรุ่น 26,000 มันก็ดึงรุ่นนั้นมา
-# วิธีแก้: อ่านงบจากคำถาม แล้วใช้ metadata filter ของ Chroma กรองราคาตั้งแต่ตอน query
-
+# ---- 5.2 ตัวอ่านตัวเลขด้วยโค้ด — เติมสิ่งที่ LLM ลืมใส่ (งบ / แรม / การ์ดจอ / ขนาดจอ) ----
 # คำที่บ่งบอกว่าตัวเลขถัดไปคือ "งบ" (บังคับต้องมีคำพวกนี้ ไม่งั้น "RTX 5050" จะโดนอ่านเป็นราคา)
 _BUDGET_CUE = (
     r"(?:งบประมาณ|งบ|ไม่เกิน|ราคาไม่เกิน|ต่ำกว่า|ถูกกว่า|ในราคา|ราคาประมาณ|budget"
@@ -409,7 +594,7 @@ def _match_value(prio: int, m: re.Match) -> float:
 
 def extract_budget(text: str) -> int | None:
     """อ่านงบสูงสุดจากข้อความ เช่น 'งบไม่เกิน 20000' / 'งบ 2 หมื่น' / 'งบ 20k' -> 20000
-    คืน None ถ้าไม่พบงบ (จะได้ไม่กรองราคามั่วตอนผู้ใช้ไม่ได้พูดถึงงบ)
+    คืน None ถ้าไม่พบงบ
 
     เก็บผู้สมัครทุกตำแหน่งแล้วไล่จากซ้ายไปขวา ไม่ใช่เอาแค่ match แรก —
     ไม่งั้นประโยคอย่าง "จอไม่เกิน 15 นิ้ว งบ 25000" จะติดที่ "15" (ต่ำกว่าเกณฑ์)
@@ -465,138 +650,29 @@ def extract_min_price(text: str) -> int | None:
     return None
 
 
-# คำถามแบบ "รุ่นถูก/แพงที่สุด" — vector search ตอบไม่ได้เพราะมันจัดอันดับด้วยความหมาย
-# ไม่ได้เรียงตามราคา ต้องดึงเอกสารสเปกของรุ่นนั้นตรง ๆ จาก metadata แทน
-_RE_CHEAPEST = re.compile(r"ถูกที่สุด|ถูกสุด|ราคาต่ำสุด|ประหยัดที่สุด|ราคาถูกที่สุด")
-_RE_PRICIEST = re.compile(r"แพงที่สุด|แพงสุด|ราคาสูงสุด|ท็อปสุด")
-
-# ---- ตรวจเจตนา "ขอหลายรุ่น / ขอเปรียบเทียบ" ----
-# ค่าเริ่มต้นของบอทคือแนะนำทีละรุ่น ถ้าลูกค้าขอหลายรุ่นต้องสลับไปใช้โครงเปรียบเทียบ
-_THAI_COUNT = {"สอง": 2, "สาม": 3, "สี่": 4, "ห้า": 5}
-_RE_COUNT = re.compile(
-    # เลขไม่เกิน 2 หลัก: "RTX 4060 รุ่นไหนคุ้ม" / "งบ 30,000 รุ่นไหน" ไม่ใช่การขอ 4060 รุ่น
-    r"(?<![\d,.])(\d{1,2}|" + "|".join(_THAI_COUNT) + r")\s*(?:รุ่น|ตัว|เครื่อง|ยี่ห้อ)"
+_RE_RAM_ASK = re.compile(
+    r"(?:แรม|ram|หน่วยความจำ)\s*(?:ขนาด\s*)?(\d{1,3})(?!\d)|(?<!\d)(\d{1,3})\s*(?:gb|กิ๊ก|กิก|จิ๊ก)\s*(?:แรม|ram)",
+    re.I,
 )
-_RE_COMPARE = re.compile(r"เปรียบเทียบ|เทียบ|ต่างกันยังไง|อันไหนดีกว่า|เลือกอันไหน")
-_RE_MANY = re.compile(r"หลายรุ่น|หลายตัว|มีอะไรบ้าง|มีรุ่นไหนบ้าง|แนะนำ.{0,10}บ้าง")
+_RE_RAM_AT_LEAST = re.compile(r"ขึ้นไป|อย่างน้อย|ไม่ต่ำกว่า|อย่างต่ำ|หรือมากกว่า|\d\s*(?:gb)?\s*\+", re.I)
 
 
-def wanted_model_count(question: str) -> int | None:
-    """ลูกค้าขอกี่รุ่น — คืน None ถ้าไม่ได้ขอหลายรุ่น (ใช้โครงรุ่นเดียวตามปกติ)"""
-    m = _RE_COUNT.search(question)
-    if m:
-        raw = m.group(1)
-        n = _THAI_COUNT.get(raw) or int(raw)
-        if n >= 2:
-            return min(n, MAX_COMPARE)
-        return None   # "1 รุ่น" = ขอรุ่นเดียว ใช้โครงเดิม
-
-    if _RE_COMPARE.search(question) or _RE_MANY.search(question):
-        return DEFAULT_COMPARE
-    return None
-
-_specs_by_price: list[tuple[int, str]] | None = None
-
-
-def get_specs_by_price() -> list[tuple[int, str]]:
-    """เอกสารสเปกทั้งหมดเรียงตามราคาจากถูกไปแพง (ดึงครั้งเดียวแล้ว cache)"""
-    global _specs_by_price
-    if _specs_by_price is None:
-        try:
-            res = get_collection().get(
-                where={"type": {"$eq": "spec"}}, include=["documents", "metadatas"]
-            )
-            pairs = [(m["price"], d) for m, d in zip(res["metadatas"], res["documents"])]
-            _specs_by_price = sorted(pairs, key=lambda p: p[0])
-        except Exception:
-            _specs_by_price = []
-    return _specs_by_price
-
-
-def _extreme_spec_doc(question: str, budget: int | None) -> str | None:
-    """คืนเอกสารสเปกของรุ่นถูกสุด/แพงสุด ถ้าคำถามถามถึง (ถ้ามีงบ จะอิงเฉพาะรุ่นในงบ)"""
-    cheap, pricey = _RE_CHEAPEST.search(question), _RE_PRICIEST.search(question)
-    if not (cheap or pricey):
+def ram_condition(question: str) -> tuple[int, bool] | None:
+    """(แรมกี่ GB, ขึ้นไปไหม) — "แรม 24" = 24 GB พอดี / "แรม 24GB ขึ้นไป" = ตั้งแต่ 24 GB"""
+    m = _RE_RAM_ASK.search(question)
+    if not m:
         return None
-    # "RTX ที่ถูกที่สุด" / "แรม 32GB ที่แพงที่สุด" = ถูก/แพงสุดในกลุ่ม -> exact_match เลือกให้แล้ว
-    # ถ้ายังยัดรุ่นถูกสุดของทั้งร้านไว้หัวแถว AI จะหยิบผิดตัว
-    if HYBRID_FILTERS and spec_filters(question):
+    gb = int(m.group(1) or m.group(2))
+    if gb not in RAM_SIZES:
         return None
-
-    pairs = get_specs_by_price()
-    if not pairs:
-        return None
-    if budget is not None:
-        pairs = [p for p in pairs if p[0] <= budget] or pairs
-    return pairs[0][1] if cheap else pairs[-1][1]
+    around = question[max(0, m.start() - 15): m.end() + 15]
+    return gb, _RE_RAM_AT_LEAST.search(around) is not None
 
 
-def _specs_nearest_to(
-    budget: int | None, min_price: int | None, n: int = 2
-) -> list[tuple[int, str]]:
-    """รุ่นที่ "ราคาใกล้ช่วงที่ขอที่สุด" n อันดับ — ใช้ตอนไม่มีรุ่นไหนอยู่ในช่วงราคาเลย
-    วัดระยะจากขอบที่ใกล้ที่สุด เช่น งบ 10,000 -> รุ่น 12,990 ห่าง 2,990 (ใกล้สุด)
-    """
-    pairs = get_specs_by_price()
-    if not pairs:
-        return []
-
-    def distance(price: int) -> int:
-        if budget is not None and price > budget:
-            return price - budget
-        if min_price is not None and price < min_price:
-            return min_price - price
-        return 0
-
-    return sorted(pairs, key=lambda p: (distance(p[0]), p[0]))[:n]
-
-
-def _query_by_type(
-    q_emb, n: int, doc_type: str, budget: int | None, min_price: int | None = None,
-    trace: list | None = None,
-) -> list[str]:
-    """ค้นเฉพาะเอกสารประเภทที่ต้องการ (spec / review) พร้อมกรองราคาถ้ามีงบ
-    trace (โหมด debug): ต่อท้ายผลค้นรอบนี้ — ชื่อรุ่น ราคา และความใกล้เคียงกับคำถาม"""
-    if n <= 0:
-        return []
-    conds = [{"type": {"$eq": doc_type}}]
-    if budget is not None:
-        # metadata "price" ถูกเก็บไว้ตอน build_index.py แล้ว (ทั้งเอกสารสเปกและรีวิว)
-        conds.append({"price": {"$lte": budget}})
-    if min_price is not None:
-        # คำถามแบบ "ราคาอยู่ระหว่าง X-Y" ต้องมีขอบล่างด้วย ไม่งั้นจะได้รุ่นถูก ๆ ที่ไม่ได้ขอ
-        conds.append({"price": {"$gte": min_price}})
-    where = conds[0] if len(conds) == 1 else {"$and": conds}
-    res = get_collection().query(query_embeddings=q_emb, n_results=n, where=where,
-                                 include=["documents", "metadatas", "distances"])
-    if trace is not None:
-        price_filter = " · ".join(filter(None, [
-            f"ราคาตั้งแต่ {min_price:,}" if min_price is not None else "",
-            f"ราคาไม่เกิน {budget:,}" if budget is not None else "",
-        ]))
-        trace.append({
-            "type": doc_type,
-            "want": n,
-            "filter": price_filter or "ไม่กรองราคา",
-            # collection ใช้ระยะ l2 กับเวกเตอร์ที่ normalize แล้ว: ระยะ = 2 - 2cos -> cos = 1 - ระยะ/2
-            "hits": [{"name": m.get("name"), "price": m.get("price"), "similarity": round(1 - d / 2, 4)}
-                     for m, d in zip(res["metadatas"][0], res["distances"][0])],
-        })
-    return res["documents"][0]
-
-
-# ---- ค้นตรงตามชื่อรุ่น/สเปก (เสริม vector search) ----
-# vector search จัดอันดับด้วย "ความหมายใกล้คำถาม" จึงพลาดคำถามที่ต้องการ "ทุกรุ่นที่ตรงเป๊ะ"
-# ทดสอบจริง: "RTX 4060 งบไม่เกิน 40,000" มีในข้อมูล 2 รุ่นแต่ค้นได้ 1 / "เทียบ Legion 5 กับ HP Victus 16"
-# ไม่ได้เอกสาร Victus 16 มาเลย โมเดลจึงตอบว่าไม่มี — เลยจับสเปกและชื่อรุ่นจากข้อความด้วยโค้ด
-# แล้วดึงรุ่นที่ตรงจากข้อมูลจริงมาไว้หัวแถว ช่วยทั้งโหมดค้นเร็ว (ค้นรอบเดียว) และค้นละเอียด (เรียก tool น้อยลง)
-MAX_EXACT = 6           # รุ่นที่ตรงเงื่อนไขสูงสุดต่อคำถาม กัน prompt ยาวเกิน
-EXACT_REVIEWS = 4       # รีวิวของรุ่นที่ลูกค้าเอ่ยชื่อ (รุ่นละ 1 ข้อ)
 _RE_GPU_ASK = re.compile(
     r"(?<![a-z0-9])(?:(?:rtx|gtx)\s*\d{4}(?:\s*ti)?|rx\s*\d{4}m?|radeon\s*\d{3}m|arc\s*[a-z]?\d{3}[a-z]?)(?![a-z0-9])",
     re.I,
 )
-_series_index: list[tuple[str, str]] | None = None
 
 
 def _squash(s: str) -> str:
@@ -619,305 +695,646 @@ def gpu_matches(gpu: str, term: str) -> bool:
     return re.search(re.escape(term) + tail + r"(?![a-z0-9])", _squash(gpu)) is not None
 
 
-def _name_tokens(name: str) -> list[str]:
-    """คำในชื่อรุ่นที่คนพิมพ์ถึง — หยุดที่รหัสรุ่น ("16-r0356TX" เหลือแค่ "16")"""
-    out = []
-    for tok in name.split():
-        if "-" in tok:
-            head = tok.split("-")[0]
-            if head.isdigit() and len(head) <= 3:
-                out.append(head)
-            break
-        out.append(tok)
-    return out
+_RE_SCREEN = re.compile(r"(?:จอ\s*)?(1[1-9](?:\.\d)?)\s*(?:นิ้ว|\"|inch|in\b)|จอ\s*(1[1-9](?:\.\d)?)(?!\d)", re.I)
 
 
-def get_series_index() -> list[tuple[str, str]]:
-    """(วลีชื่อรุ่น 2-3 คำ, ชื่อสินค้าเต็ม) เช่น ("legion 5", "Lenovo Legion 5 15IRX10-...")"""
-    global _series_index
-    if _series_index is None:
-        idx = set()
-        for lp in get_laptops():
-            toks = _name_tokens(lp["ชื่อสินค้า"])
-            for n in (2, 3):
-                for i in range(len(toks) - n + 1):
-                    phrase = _squash(" ".join(toks[i:i + n]))
-                    if re.search(r"[a-z]", phrase):
-                        idx.add((phrase, lp["ชื่อสินค้า"]))
-        _series_index = sorted(idx, key=lambda p: -len(p[0]))
-    return _series_index
-
-
-def asked_model_names(question: str) -> list[str]:
-    """รุ่นที่ลูกค้าเอ่ยชื่อ (ชื่อซีรีส์ หรือรหัสรุ่นเต็ม) — ไม่มี = []"""
-    q = _squash(question)
-    names = []
-    for lp in get_laptops():  # รหัสรุ่นเต็ม เช่น "ANV15-51-56QE"
-        code = next((t for t in lp["ชื่อสินค้า"].split() if "-" in t), "")
-        if len(code) >= 6 and code.lower() in q and lp["ชื่อสินค้า"] not in names:
-            names.append(lp["ชื่อสินค้า"])
-    hits = [(phrase, name) for phrase, name in get_series_index()
-            if re.search(r"(?<![a-z0-9])" + re.escape(phrase) + r"(?![a-z0-9])", q)]
-    # เก็บเฉพาะวลีที่เจาะจงที่สุด: พิมพ์ "HP Victus 16" ต้องได้แค่ Victus 16
-    # ไม่ใช่ทุกรุ่นที่ขึ้นต้น "HP Victus" (วลีสั้นที่อยู่ในวลีที่ยาวกว่าซึ่งก็ตรงด้วย = ทิ้ง)
-    matched = {p for p, _ in hits}
-    specific = {p for p in matched if not any(p != o and f" {p} " in f" {o} " for o in matched)}
-    for phrase, name in hits:
-        if phrase in specific and name not in names:
-            names.append(name)
-    return names
-
-
-# ---- เงื่อนไขตัวเลขในคำถาม (แรม / จัดอันดับคะแนน / ถูก-แพงสุดในกลุ่ม) ----
-# ค้นตามความหมายแยก "แรม 16GB" กับ "แรม 24GB" ไม่ออก และเห็นแค่ top-k จึงจัดอันดับทั้งร้านไม่ได้
-# ทดสอบจริง: "แรม 24GB มีรุ่นไหนบ้าง" ได้สเปกแรม 16GB มาทั้ง 6 ชิ้น (ในร้านมีแรม 24GB 13 รุ่น)
-# "รุ่นไหนคะแนน CPU สูงที่สุด" ได้ Legion 9i ทั้งที่ MSI Raider 16 Max สูงกว่า — เลยอ่านเงื่อนไข
-# แล้วกรอง/เรียงจากข้อมูลจริงทั้ง 99 รุ่นด้วยโค้ด (hybrid retrieval)
-# ปิด (false) = RAG ค้นตามความหมายอย่างเดียว เหลือแค่กฎการ์ดจอ + ชื่อรุ่น — ไว้เทียบผลหรือถ้าลูกค้าเลือกแบบนั้น
-HYBRID_FILTERS = os.getenv("HYBRID_FILTERS", "true").lower() == "true"
-# v2 = ตีความคำถามเป็นเงื่อนไขด้วย LLM แล้วกรอง/เรียงจากข้อมูลจริง (rag_v2.py) / v1 = ค้นตามความหมาย + กฎด้านบน
-RAG_PIPELINE = os.getenv("RAG_PIPELINE", "v2").lower()
-
-
-def use_v2(job: dict) -> bool:
-    return RAG_PIPELINE == "v2"
-RAM_SIZES = {4, 8, 12, 16, 24, 32, 48, 64, 96, 128}
-MAX_LIST = 15           # รุ่นที่ไล่ชื่อในบรรทัดสรุปผลค้นตรงได้สูงสุด
-_RE_RAM_ASK = re.compile(
-    r"(?:แรม|ram|หน่วยความจำ)\s*(?:ขนาด\s*)?(\d{1,3})(?!\d)|(?<!\d)(\d{1,3})\s*(?:gb|กิ๊ก|กิก|จิ๊ก)\s*(?:แรม|ram)",
-    re.I,
-)
-_RE_AT_LEAST = re.compile(r"ขึ้นไป|อย่างน้อย|ไม่ต่ำกว่า|อย่างต่ำ|หรือมากกว่า|\d\s*(?:gb)?\s*\+", re.I)
-_RE_GPU_FAMILY = re.compile(r"(?<![a-z])(rtx|gtx)(?!\s*\d)", re.I)
-_TOP = r"(?:สูงสุด|สูงที่สุด|แรงสุด|แรงที่สุด|ดีสุด|ดีที่สุด|เร็วสุด|เร็วที่สุด|มากสุด|มากที่สุด|อันดับ\s*1)"
-_RE_CPU_TOP = re.compile(rf"(?:cpu|ซีพียู|โปรเซสเซอร์).{{0,25}}{_TOP}|{_TOP}.{{0,10}}(?:cpu|ซีพียู)", re.I)
-_RE_GPU_TOP = re.compile(rf"(?:gpu|การ์ดจอ|กราฟิก).{{0,25}}{_TOP}|{_TOP}.{{0,10}}(?:gpu|การ์ดจอ)", re.I)
-_RE_DESC = re.compile(r"แพงไปถูก|มากไปน้อย|สูงไปต่ำ")
-# ลูกค้าขอ "รายชื่อ" -> ไล่ชื่อครบตามผลค้นตรง แทนโครงแนะนำ/เปรียบเทียบ (ใช้ใน build_prompt)
-_RE_LIST = re.compile(r"มีรุ่นไหนบ้าง|มีตัวไหนบ้าง|รุ่นไหนบ้าง|ตัวไหนบ้าง|มีอะไรบ้าง|กี่รุ่น|ลิสต์|list|ไล่ชื่อ|รายชื่อ|เรียง", re.I)
-EXACT_NOTE = "ผลค้นตรงตามสเปก (นับจากข้อมูลทั้งหมด): "
-
-
-def ram_condition(question: str) -> tuple[int, bool] | None:
-    """(แรมกี่ GB, ขึ้นไปไหม) — "แรม 24" = 24 GB พอดี / "แรม 24GB ขึ้นไป" = ตั้งแต่ 24 GB"""
-    m = _RE_RAM_ASK.search(question)
-    if not m:
-        return None
-    gb = int(m.group(1) or m.group(2))
-    if gb not in RAM_SIZES:
-        return None
-    around = question[max(0, m.start() - 15): m.end() + 15]
-    return gb, _RE_AT_LEAST.search(around) is not None
-
-
-def spec_filters(question: str) -> list[tuple[str, object]]:
-    """เงื่อนไขสเปกที่อ่านได้จากคำถาม -> [(คำอธิบาย, ฟังก์ชันตรวจรุ่น)] ใช้กรองข้อมูลจริงทั้งร้าน"""
-    out = []
-    terms = gpu_terms(question)
-    if terms:
-        out.append((f"การ์ดจอ {', '.join(t.upper() for t in terms)}",
-                    lambda lp: any(gpu_matches(lp["spec"]["GPU"], t) for t in terms)))
-    if not HYBRID_FILTERS:
-        return out   # RAG ล้วน: เหลือแค่กฎการ์ดจอรุ่นเฉพาะแบบเดิม
-    if not terms and (fam := _RE_GPU_FAMILY.search(question)):
-        word = fam.group(1).lower()
-        out.append((f"การ์ดจอ {word.upper()}", lambda lp: word in lp["spec"]["GPU"].lower()))
+def _safety_net(plan: dict, question: str) -> list[str]:
+    """เติมตัวเลขที่ตัวอ่านด้วยโค้ด (ทดสอบแล้ว) จับได้แต่ LLM ไม่ได้ใส่ — คืนรายการที่เติม"""
+    fl, added = plan["filters"], []
+    budget, low = extract_budget(question), extract_min_price(question)
+    if budget and not any(fl[k] for k in ("price_max", "price_target")):
+        if re.search(r"ประมาณ|ราวๆ|ราว ๆ|แถว", question):
+            fl["price_target"] = budget
+        else:
+            fl["price_max"] = budget
+        added.append(f"งบ {budget:,}")
+    if low and not fl["price_min"] and fl["price_max"]:
+        fl["price_min"] = low
     ram = ram_condition(question)
-    if ram:
+    if ram and not (fl["ram_gb"] or fl["ram_min"]):
         gb, at_least = ram
-        if at_least:
-            out.append((f"แรม {gb} GB ขึ้นไป", lambda lp: _ram_gb(lp["spec"]["RAM"]) >= gb))
+        fl["ram_min" if at_least else "ram_gb"] = gb
+        added.append(f"แรม {gb}")
+    terms = gpu_terms(question)
+    if terms and not fl["gpu"]:
+        fl["gpu"] = terms[0].upper()
+        added.append(terms[0].upper())
+    m = _RE_SCREEN.search(question)
+    if m and not fl["screen"]:
+        fl["screen"] = float(m.group(1) or m.group(2))
+        added.append(f"จอ {fl['screen']:g} นิ้ว")
+    if plan["intent"] in TEMPLATED and (budget or ram or terms or m):
+        plan["intent"] = "recommend"   # มีเงื่อนไขสินค้าชัดเจน ไม่ใช่นอกเรื่อง
+    return added
+
+
+# ---- 5.3 ความละเอียดจอ / SSD / Windows — มีในข้อความสเปกอยู่แล้ว โค้ดอ่านเงื่อนไขจากคำถามเอง (ไม่ฝาก LLM) ----
+# รองรับแบบพื้นฐาน: ค่าตรงตัว, "ขึ้นไป/อย่างน้อย", "สูงกว่า/มากกว่า" — ไม่จำข้ามข้อความ
+RES_WORDS = (   # คำเรียกความละเอียด -> ความกว้างพิกเซลในข้อมูลร้าน
+    (re.compile(r"(?<![a-z\d.])4\s*k(?![a-z0-9])|(?<![a-z])uhd(?![a-z]|\s*graphics|\s*\d)|2160p"), 3840),
+    (re.compile(r"(?<![a-z\d.])(?:3|2\.8)\s*k(?![a-z0-9])"), 2880),
+    (re.compile(r"(?<![a-z\d.])(?:2|2\.5)\s*k(?![a-z0-9])|(?<![a-z])(?:qhd|wqxga)(?![a-z])|1440p|1600p"), 2560),
+    (re.compile(r"(?<![a-z])(?:fhd|full\s*hd|wuxga)(?![a-z])|1080p|1200p"), 1920),
+)
+_RE_ABOVE = re.compile(r"(?<!ไม่)(?:สูงกว่า|มากกว่า|เกินกว่า)")
+_RE_AT_LEAST = re.compile(r"ขึ้นไป|อย่างน้อย|ไม่ต่ำกว่า|เป็นต้นไป")
+_RE_SSD_WORD = re.compile(r"ssd|pcie|nvme|m\.2")
+_RE_STORAGE = (
+    re.compile(r"(\d+(?:\.\d+)?)\s*(tb)(?![a-z])"),
+    re.compile(r"(?:ssd|ความจุ|storage|hdd|ฮาร์ดดิส|ที่เก็บข้อมูล)\D{0,12}?(\d+)\s*(gb|tb|กิ๊ก)"),
+    re.compile(r"(?<!\d)(256|512)\s*(gb|กิ๊ก)"),
+)
+OS_WORDS = {"single language": "Windows 11 Home Single Language", "pro": "Windows Pro",
+            "windows 10": "Windows 10", "home": "Windows 11 Home", "windows": "Windows"}
+
+
+def _compare(q: str, start: int, end: int) -> str | None:
+    """คำเปรียบเทียบที่อยู่ติดกับค่าที่เจอ: "gt" = สูงกว่า, "min" = ขึ้นไป (ดูแค่รอบ ๆ ไม่ให้ "งบไม่เกิน" ปน)"""
+    near = q[max(0, start - 16):start] + " " + q[end:end + 14]
+    if _RE_ABOVE.search(near):
+        return "gt"
+    if _RE_AT_LEAST.search(near):
+        return "min"
+    return None
+
+
+def spec_extras(question: str) -> tuple[dict, list[str]]:
+    """อ่านเงื่อนไขความละเอียดจอ / SSD Gen / ความจุ / รุ่น Windows จากคำถาม
+    คืน (ค่าตัวกรอง, ชื่อเรื่องใน UNSUPPORTED ที่คัดได้แล้ว)"""
+    q, fl, covered = question.lower(), {}, []
+    m = re.search(r"(\d{4})\s*[x×]\s*(\d{3,4})", q)
+    width = int(m.group(1)) if m else None
+    if not m:
+        for rx, w in RES_WORDS:
+            m = rx.search(q)
+            if m:
+                width = w
+                break
+    if width:
+        how = _compare(q, m.start(), m.end())
+        if how == "gt":
+            fl["res_gt"] = width
+        elif how == "min":
+            fl["res_min"] = width
         else:
-            out.append((f"แรม {gb} GB", lambda lp: _ram_gb(lp["spec"]["RAM"]) == gb))
-    return out
+            fl["res_w"] = width
+            if m.re.pattern.startswith(r"(\d{4})"):
+                fl["res_h"] = int(m.group(2))
+        covered.append("ความละเอียดจอ")
+    if _RE_SSD_WORD.search(q):
+        gens = sorted({int(g) for g in re.findall(r"gen\s*(\d)(?!\d)", q)})
+        if gens:
+            g = re.search(r"gen\s*\d(?!\d)", q)
+            fl["ssd_gen"] = list(range(gens[0], 6)) if _compare(q, g.start(), g.end()) else gens
+            covered.append("Gen ของ SSD")
+    for rx in _RE_STORAGE:
+        m = rx.search(q)
+        if m:
+            gb = _gb(m.group(1), "tb" if m.group(2) == "tb" else "gb")
+            fl["storage_min" if _compare(q, m.start(), m.end()) else "storage_gb"] = gb
+            covered.append("ความจุ SSD")
+            break
+    if re.search(r"windows(?!\s*hello)|วินโดว์|(?<![a-z])win\s*1[01]|single\s*language", q):
+        fl["os"] = ("single language" if re.search(r"single\s*language", q) else
+                    "pro" if re.search(r"(?:windows|win)\s*(?:1[01]\s*)?pro(?![a-z])", q) else
+                    "windows 10" if re.search(r"(?:windows|win)\s*10", q) else
+                    "home" if "home" in q else "windows")
+        covered.append("รุ่นของ Windows")
+    return fl, covered
 
 
-def exact_match(question: str, budget: int | None = None, min_price: int | None = None
-                ) -> tuple[list[str], list[str]]:
-    """คืน (เอกสารสเปก + บรรทัดสรุปผลค้นตรง, ชื่อรุ่นที่ลูกค้าเอ่ยถึง) — ไม่เข้าเงื่อนไขเลย = ([], [])
-    บรรทัดสรุปขึ้นต้นด้วย EXACT_NOTE เสมอ (หน้า debug และ build_prompt ใช้คำนี้แยกจากเอกสารสเปก)"""
-    def in_range(lp):
-        return ((budget is None or lp["ราคา"] <= budget)
-                and (min_price is None or lp["ราคา"] >= min_price))
-
-    def price_cond():
-        return "".join([f" ราคาตั้งแต่ {min_price:,} บาท" if min_price else "",
-                        f" ราคาไม่เกิน {budget:,} บาท" if budget else ""])
-
-    name = lambda lp: lp["ชื่อสินค้า"]
-    laptops = get_laptops()
-    names, notes = [], []
-    filters = spec_filters(question)
-    label = " · ".join(text for text, _ in filters) + price_cond()
-    pool = [lp for lp in laptops if in_range(lp) and all(ok(lp) for _, ok in filters)]
-    rank = "CPU" if _RE_CPU_TOP.search(question) else "GPU" if _RE_GPU_TOP.search(question) else None
-    cheap, pricey = _RE_CHEAPEST.search(question), _RE_PRICIEST.search(question)
-    if not HYBRID_FILTERS:
-        rank = cheap = pricey = None
-
-    if rank:
-        # จัดอันดับคะแนนจากทุกรุ่นที่เข้าเงื่อนไข (คะแนนเท่ากันให้รุ่นถูกกว่าขึ้นก่อน)
-        score = lambda lp: lp["benchmark"][f"{rank} Score"]
-        top = sorted(pool, key=lambda lp: (-score(lp), lp["ราคา"]))[:5]
-        best = [lp for lp in top if score(lp) == score(top[0])] if top else []
-        ranking = ", ".join(f"{i}. {name(lp)} (คะแนน {rank} {score(lp):,}, ราคา {lp['ราคา']:,} บาท)"
-                            for i, lp in enumerate(top, 1))
-        notes.append(f"{EXACT_NOTE}เรียงตามคะแนน {rank} จากสูงไปต่ำ"
-                     f"{' เฉพาะ' + label if label else ' จากทุกรุ่น'}: {ranking or 'ไม่มีรุ่นที่ตรงเงื่อนไข'}"
-                     + (f" — รุ่นที่คะแนน {rank} สูงที่สุดคือ {' และ '.join(name(lp) for lp in best)}"
-                        + (" (คะแนนเท่ากัน)" if len(best) > 1 else "") if best else ""))
-        names += [name(lp) for lp in top]
-    elif filters and (cheap or pricey):
-        ordered = sorted(pool, key=lambda lp: lp["ราคา"], reverse=bool(pricey))
-        if ordered:
-            lp = ordered[0]
-            notes.append(f"{EXACT_NOTE}รุ่นที่{'แพง' if pricey else 'ถูก'}ที่สุดในกลุ่ม{label} คือ {name(lp)}"
-                         f" ราคา {lp['ราคา']:,} บาท (กลุ่มนี้มีทั้งหมด {len(ordered)} รุ่น)")
-        else:
-            notes.append(f"{EXACT_NOTE}ไม่มีรุ่นที่ตรงเงื่อนไข{label}")
-        names += [name(lp) for lp in ordered[:3]]
-    elif filters:
-        hits = sorted(pool, key=lambda lp: lp["ราคา"], reverse=bool(_RE_DESC.search(question)))
-        listing = ", ".join(f"{name(lp)} ({lp['ราคา']:,} บาท)" for lp in hits[:MAX_LIST])
-        more = f" และอีก {len(hits) - MAX_LIST} รุ่น" if len(hits) > MAX_LIST else ""
-        # บอกจำนวนรุ่นที่ตรงจริงไว้ด้วย โมเดลจะได้ตอบ "มีเท่านี้" ได้มั่นใจ ไม่แต่งรุ่นเพิ่ม
-        notes.append(f"{EXACT_NOTE}{label} มีทั้งหมด {len(hits)} รุ่น"
-                     f" (เรียงราคาจาก{'แพงไปถูก' if _RE_DESC.search(question) else 'ถูกไปแพง'}): "
-                     f"{listing + more if hits else 'ไม่มีรุ่นที่ตรงเงื่อนไข'}")
-        names += [name(lp) for lp in hits]
-
-    mentioned = asked_model_names(question)
-    asked = [n for n in mentioned if any(name(lp) == n and in_range(lp) for lp in laptops)]
-    # รุ่นที่ลูกค้าเอ่ยถึงแต่ราคาอยู่นอกงบ — ถูกกรองออกจากผลค้น ถ้าไม่บอก AI จะตอบว่า "ไม่มีในข้อมูล"
-    outside = [lp for lp in laptops if HYBRID_FILTERS and name(lp) in mentioned and not in_range(lp)]
-    if outside:
-        def why(lp):
-            if budget is not None and lp["ราคา"] > budget:
-                return f"เกินงบ {lp['ราคา'] - budget:,} บาท"
-            return "ต่ำกว่าช่วงราคาที่ขอ"
-        notes.append(f"{EXACT_NOTE}รุ่นที่ลูกค้าเอ่ยถึงมีอยู่ในข้อมูล แต่ราคาอยู่นอกงบที่ขอ: "
-                     + ", ".join(f"{name(lp)} ราคา {lp['ราคา']:,} บาท ({why(lp)})" for lp in outside[:MAX_EXACT])
-                     + " — ให้บอกลูกค้าว่ารุ่นนี้มี แต่ราคาเกินงบ ห้ามตอบว่าไม่มีในข้อมูล")
-    names += [n for n in asked if n not in names]
-
-    by_name = get_spec_doc_by_name()
-    docs = [by_name[n] for n in names[:MAX_EXACT] if n in by_name]
-    return (notes + docs if docs or notes else []), asked[:MAX_EXACT]
+# ---- 5.4 เงื่อนไขที่ยังไม่มีตัวกรอง ----
+# บางเรื่องอยู่ในข้อความสเปก (ความละเอียดจอ, Gen ของ SSD, รุ่น Windows — spec_extras คัดได้แล้ว)
+# บางเรื่องไม่มีในข้อมูลเลย (Hz, น้ำหนัก, พอร์ต) ถ้าไม่จับไว้ ตัวตีความจะทิ้งเงื่อนไขเงียบ ๆ
+# แล้วระบบส่งรุ่นที่ไม่ได้กรองไปให้ AI ซึ่งจะเขียนว่า "มี 40 รุ่นตรงเงื่อนไข" (ชุดคำถามลูกค้า 7 ข้อ)
+UNSUPPORTED = (
+    ("ความถี่จอ (Hz)", re.compile(r"\d{2,3}\s*(?:hz|เฮิร์?ตซ์)|refresh|รีเฟรช")),
+    ("ความละเอียดจอ", re.compile(
+        r"(?<![\d.,])[2-8](?:\.5)?\s*k(?![a-z0-9])|(?<![a-z])(?:qhd|fhd|wuxga|wqxga|full\s*hd)(?![a-z])"
+        r"|(?<![a-z])uhd(?![a-z]|\s*graphics|\s*\d)|(?<!\d)(?:1080|1440|1600|2160)p|\d{4}\s*[x×]\s*\d{3,4}"
+        r"|ความละเอียด|resolution")),
+    ("Gen ของ SSD", re.compile(r"(?:ssd|pcie|nvme|m\.2).{0,20}?gen\s*\d|gen\s*\d.{0,20}?(?:ssd|pcie|nvme)")),
+    ("ความจุ SSD", re.compile(
+        r"\d+(?:\.\d+)?\s*tb(?![a-z])|(?:ssd|ความจุ|storage|hdd|ฮาร์ดดิส|ที่เก็บข้อมูล)\D{0,12}\d+\s*(?:gb|tb|กิ๊ก)"
+        r"|(?<!\d)(?:256|512)\s*(?:gb|กิ๊ก)")),
+    ("รุ่นของ Windows", re.compile(r"windows(?!\s*hello)|วินโดว์|(?<![a-z])win\s*1[01]|single\s*language|ระบบปฏิบัติการ")),
+    ("น้ำหนักเครื่อง", re.compile(r"น้ำหนัก|\d(?:\.\d+)?\s*(?:kg|กก\.?|กิโล)(?![a-z])")),
+    ("พอร์ตและช่องเชื่อมต่อ", re.compile(
+        r"usb[\s-]*c|type[\s-]*c|thunderbolt|hdmi|(?<![a-z])lan(?![a-z])|rj[\s-]*45|พอร์ต|ช่องเสียบ|ช่องต่อ"
+        r"|sd\s*card|การ์ดรีดเดอร์")),
+    ("แป้นตัวเลข (Number pad)", re.compile(r"num\s*pad|number\s*pad|แป้นตัวเลข|ปุ่มตัวเลข")),
+    ("ไฟคีย์บอร์ด", re.compile(r"ไฟคีย์บอร์ด|ไฟที่คีย์บอร์ด|คีย์บอร์ดมีไฟ|backlit|backlight|(?<![a-z])rgb(?![a-z])")),
+    ("มาตรฐาน MIL-STD", re.compile(r"mil[\s-]*std|มาตรฐานทหาร|มาตรฐานกองทัพ")),
+    ("การสแกนนิ้วหรือสแกนหน้า", re.compile(r"สแกนนิ้ว|ลายนิ้วมือ|fingerprint|สแกนหน้า|windows\s*hello")),
+    ("Wi-Fi หรือ Bluetooth", re.compile(r"wi[\s-]*fi\s*(?:6e?|7)|bluetooth\s*\d")),
+    ("ชั่วโมงใช้งานแบต", re.compile(
+        r"\d+\s*wh(?![a-z])|แบต\S*\s*(?:อยู่ได้|ใช้ได้)?\s*(?:นาน\s*)?\d+(?:\s*-\s*\d+)?\s*(?:ชั่วโมง|ชม)")),
+    ("จอสัมผัส", re.compile(r"จอสัมผัส|จอทัช|ทัชสกรีน|touch\s*screen")),
+)
+SEARCHABLE = "ยี่ห้อ ซีรีส์ ราคา CPU การ์ดจอ แรม ขนาดจอ ความละเอียดจอ SSD และรุ่น Windows"
 
 
-def _reviews_of(names: list[str], limit: int) -> list[str]:
-    """รีวิวรุ่นละ 1 ข้อของรุ่นที่ลูกค้าเอ่ยชื่อ — ใช้ตอบข้อดี/ข้อเสียตอนเทียบรุ่น"""
-    out = []
-    for name in names[:limit]:
-        res = get_collection().get(
-            where={"$and": [{"type": {"$eq": "review"}}, {"name": {"$eq": name}}]},
-            include=["documents"], limit=1,
-        )
-        out += res["documents"]
-    return out
+def unsupported_terms(question: str) -> list[str]:
+    """เรื่องที่ลูกค้าขอแต่ระบบยังคัดรุ่นให้ไม่ได้ (คืนชื่อเรื่องภาษาไทย ไม่ซ้ำ ตามลำดับในตาราง)"""
+    q = question.lower()
+    return [label for label, rx in UNSUPPORTED if rx.search(q)]
 
 
-def retrieve(
-    question: str, k_spec: int = TOP_K_SPEC, k_review: int = TOP_K_REVIEW,
-    budget: int | None = None, min_price: int | None = None, trace: dict | None = None,
-) -> tuple[list[str], bool]:
-    """ค้นเอกสารที่เกี่ยวข้องที่สุด ถ้ามีงบจะกรองเฉพาะรุ่นที่ราคาไม่เกินงบ
-    คืน (เอกสาร, over_budget) — over_budget=True แปลว่าไม่มีรุ่นไหนอยู่ในงบเลย
-    trace (โหมด debug): บันทึกทุกขั้น — embed, ผลค้นแต่ละรอบ, ขั้นที่ปรับผลค้น และที่มาของเอกสารแต่ละชิ้น
+# ---- 5.5 กฎหลัง LLM: การใช้งานที่ลูกค้าไม่ได้พูด / "แนะนำ" ที่จริงคือขอรายชื่อ ----
+USAGE_HINTS = {
+    "เกม": ("เกม", "game", "gaming", "valorant", "rov", "pubg", "gta", "fps", "esport", "สตรีม", "stream"),
+    "ตัดต่อ": ("ตัดต่อ", "edit", "premiere", "davinci", "render", "เรนเดอร์", "กราฟิก", "graphic", "3d", "blender",
+               "photoshop", "ออกแบบ", "design", "autocad", "วิดีโอ", "video", "คลิป"),
+    "ทำงาน": ("ทำงาน", "office", "ออฟฟิศ", "เอกสาร", "excel", "word", "powerpoint"),
+    "เรียน": ("เรียน", "นักศึกษา", "นักเรียน", "มหาลัย", "study"),
+    "โปรแกรม": ("โปรแกรม", "โค้ด", "code", "coding", "dev"),
+    "พกพา": ("พกพา", "เบา", "บาง", "แบต", "battery", "portable"),
+    "ai": ("ai", "machine learning", "deep learning", "llm"),
+}
+_RE_ADVICE = re.compile(r"แนะนำ|ตัวไหนดี|รุ่นไหนดี|อันไหนดี|คุ้ม|เหมาะ|ควรซื้อ|ช่วยเลือก")
+SPEC_FILTERS = ("ram_gb", "ram_min", "gpu", "gpu_family", "cpu", "brand", "series", "screen",
+                "res_w", "res_min", "res_gt", "ssd_gen", "storage_gb", "storage_min", "os")
+_RE_LIST_Q = re.compile(r"(?:รุ่น|ตัว|เครื่อง|อะไร|ไหน)\s*(?:ไหน|อะไร)?\s*บ้าง|ทุกรุ่น|ทุกตัว|ทั้งหมด")
 
-    สำคัญ: ต้องแยกโควตา spec/review แทนที่จะค้นรวมแล้วเอา top-k
-    เพราะในฐานข้อมูลมีรีวิว 297 ต่อสเปก 99 (3:1) ถ้าค้นรวม รีวิวจะกวาด
-    ทุกช่องไปหมดสำหรับคำถามเชิงความรู้สึก ("แบตอึดไหม", "เครื่องร้อนไหม")
-    แล้ว LLM จะไม่เห็นราคา/สเปก/คะแนนเบนช์มาร์กเลย -> แต่งตัวเลขเอง
-    """
+
+def _ground_usage(plan: dict, question: str, history: list, last_plan: dict | None) -> str | None:
+    """ทิ้ง usage ที่ลูกค้าไม่ได้พูดถึง (ในข้อความนี้ ข้อความก่อน ๆ หรือเงื่อนไขเดิม) — คืนค่าที่ทิ้ง"""
+    usage = plan["usage"]
+    if not usage:
+        return None
+    said = " ".join([question] + [h["content"] for h in history[-HISTORY_TURNS:] if h["role"] == "user"]).lower()
+    if last_plan and last_plan.get("usage"):
+        said += " " + str(last_plan["usage"]).lower()
+    u = usage.lower()
+    cats = [kws for kws in USAGE_HINTS.values() if any(k in u for k in kws)]
+    grounded = any(k in said for kws in cats for k in kws) if cats else u in said
+    if grounded:
+        return None
+    plan["usage"] = None
+    return usage
+
+
+def check_plan(plan: dict, question: str, history: list, last_plan: dict | None) -> list[str]:
+    """กฎหลัง LLM แปลงคำถาม: ทิ้ง usage ที่ลูกค้าไม่ได้พูด และแก้ "แนะนำ" ที่จริงคือขอรายชื่อ — คืนสิ่งที่แก้"""
+    fixed = []
+    dropped = _ground_usage(plan, question, history, last_plan)
+    if dropped:
+        fixed.append(f"ตัดการใช้งาน «{dropped}» ออก (ลูกค้าไม่ได้พูด)")
+    if plan["intent"] == "recommend" and not plan["usage"] and not plan["limit"] and not _RE_ADVICE.search(question):
+        # "มีรุ่นไหนบ้าง" / "ขอรุ่นที่ใช้ Core i7" ไม่ได้บอกการใช้งานและไม่ได้ขอคำแนะนำ
+        # = ขอรายชื่อทุกรุ่นที่ตรง ไม่ใช่ 3 รุ่นแนะนำ
+        if _RE_LIST_Q.search(question):
+            plan["intent"] = "list"
+            fixed.append("เปลี่ยนเป็นขอรายชื่อ (ถามว่ามีรุ่นไหนบ้าง)")
+        elif any(plan["filters"][k] for k in SPEC_FILTERS):
+            plan["intent"] = "list"
+            fixed.append("เปลี่ยนเป็นขอรายชื่อ (ระบุสเปกแต่ไม่ได้ขอคำแนะนำ)")
+    return fixed
+
+
+# ---- 5.6 รวมทุกขั้นของการตีความ ----
+def understand(question: str, history: list, last_plan: dict | None, provider: dict,
+               trace: dict | None = None) -> dict:
     started = time.perf_counter()
-    embedder = get_embedder()
-    loaded = time.perf_counter()   # คำถามแรกหลังรีสตาร์ตต้องโหลดโมเดลก่อน (หลายวินาที) แยกเวลาไว้ไม่ให้ดูเหมือน embed ช้า
-    q_emb = embedder.encode([question], normalize_embeddings=True).tolist()
-    searches = adjust = None
+    user = (f"ยี่ห้อในร้าน: Lenovo, Asus, MSI, Acer, HP, HyperX, Gigabyte\nซีรีส์ในร้าน: {_series_list()}\n\n"
+            f"เงื่อนไขเดิม: {json.dumps(last_plan, ensure_ascii=False) if last_plan else '(ไม่มี)'}\n"
+            f"บทสนทนาล่าสุด:\n{_history_text(history)}\n\nข้อความใหม่ของลูกค้า: {question}\nJSON:")
+    raw_text, err = "", None
+    try:
+        raw_text, _, _ = complete(provider, [{"role": "system", "content": UNDERSTAND_RULES},
+                                             {"role": "user", "content": user}],
+                                  max_tokens=400, temperature=0, json_mode=True)
+        plan = normalize(_parse_json(raw_text))
+    except (ValueError, json.JSONDecodeError) as e:
+        err = f"อ่าน JSON ไม่ได้ ({e}) — ใช้ตัวอ่านตัวเลขเดิมแทน"
+        plan = normalize({})
+    added = _safety_net(plan, question)
+    extras, covered = spec_extras(question)
+    if extras:
+        plan["filters"].update(extras)
+        added.append("อ่านจากคำถาม: " + describe({**normalize({})["filters"], **extras}))
+        if plan["intent"] in ("general", "offtopic", "greeting", "overview"):
+            plan["intent"] = "list"   # "มีกี่รุ่นที่ใช้ SSD Gen 5" ต้องคัดรุ่น ไม่ใช่ภาพรวมร้าน
+        if plan["intent"] == "rank" and not plan["sort"]:
+            # LLM ไม่มีช่องให้ใส่ความละเอียด/SSD เลยเดาเป็น "จัดอันดับ 1 รุ่น" — ไม่มีเกณฑ์เรียง = ขอรายชื่อ
+            plan["intent"], plan["limit"] = "list", None
+    added += check_plan(plan, question, history, last_plan)
+    plan["unsupported"] = [t for t in unsupported_terms(question) if t not in covered]
+    if plan["unsupported"]:
+        added.append("ยังคัดตามเรื่องนี้ไม่ได้: " + ", ".join(plan["unsupported"]))
     if trace is not None:
-        load_ms = round((loaded - started) * 1000)
-        trace["embed"] = {
-            "model": EMBED_MODEL, "dims": len(q_emb[0]),
-            "ms": round((time.perf_counter() - loaded) * 1000),
-            "load_ms": load_ms if load_ms >= 50 else 0,
-            "preview": [round(v, 4) for v in q_emb[0][:8]],
-        }
-        searches = trace["searches"] = []
-        adjust = trace["adjust"] = []
-    source: dict[str, str] = {}   # เอกสาร -> มาจากขั้นไหน (เฉพาะที่ไม่ได้มาจาก vector search ตรง ๆ)
+        trace["understand"] = {"ms": round((time.perf_counter() - started) * 1000), "raw": raw_text[:1500],
+                               "plan": plan, "added": added, "error": err}
+    return plan
 
-    specs = _query_by_type(q_emb, k_spec, "spec", budget, min_price, trace=searches)
-    over_budget = (budget is not None or min_price is not None) and not specs
-    if over_budget:
-        # ไม่มีรุ่นไหนในช่วงราคาเลย -> ค้นใหม่แบบไม่กรอง เพื่อให้ AI บอกได้ว่ามีอะไรใกล้เคียง
-        specs = _query_by_type(q_emb, k_spec, "spec", None, trace=searches)
-        reviews = _query_by_type(q_emb, k_review, "review", None, trace=searches)
-        # แต่ vector search คืนรุ่นที่ "ความหมายใกล้คำถาม" ไม่ใช่รุ่นที่ "ราคาใกล้งบ"
-        # ถาม "เล่นเกม งบ 10,000" จะได้โน้ตบุ๊คเกมมิ่งราคา 25,990 มาแทนรุ่นถูกสุด 12,990
-        # จึงต้องยัดรุ่นที่ราคาใกล้งบจริง ๆ เข้าไปหัวแถวเอง
-        near = [doc for _, doc in _specs_nearest_to(budget, min_price, n=2)]
-        specs = near + [d for d in specs if d not in near][: max(0, k_spec - len(near))]
-        if adjust is not None:
-            source.update(dict.fromkeys(near, "near_price"))
-            adjust.append("ไม่มีรุ่นไหนอยู่ในช่วงราคาที่ขอ -> ค้นใหม่แบบไม่กรองราคา "
-                          f"แล้วดึงรุ่นที่ราคาใกล้งบที่สุดขึ้นหัวแถว: {', '.join(map(doc_name, near))}")
+
+# ═════════════════════════ 6. คัดรุ่นจากข้อมูลจริง ═════════════════════════
+RECOMMEND_POOL = 3     # รุ่นที่ส่งให้ AI เลือกแนะนำ (ถ้าลูกค้าไม่ได้ขอจำนวน)
+RANK_TOP = 5           # อันดับที่แนบไปให้ AI เล่าต่อในคำถามจัดอันดับ
+PRICE_BAND = 0.15      # "ราคาประมาณ X" = X ±15%
+
+
+def resolve_models(mentions: list[str]) -> tuple[list[dict], list[str]]:
+    """ชื่อรุ่น/ซีรีส์ที่ลูกค้าเอ่ย -> รุ่นในร้าน (คืน รุ่นที่เจอ, คำที่หาไม่เจอ)"""
+    cat, found, missing = catalog(), [], []
+    for m in mentions:
+        q = re.sub(r"\s+", " ", m.lower()).strip()
+        hits = [lp for lp in cat if q in lp["name"].lower()]
+        if not hits:   # ชื่อย่อ เช่น "Legion 5" / "Victus 16" -> เทียบกับซีรีส์
+            hits = [lp for lp in cat if q in lp["series"].lower() or lp["series"].lower() in q]
+        if not hits:
+            hits = [lp for lp in cat if any(len(t) >= 6 and t.lower() in q for t in lp["name"].split() if "-" in t)]
+        if hits:
+            found += [lp for lp in hits if lp not in found]
+        else:
+            missing.append(m)
+    return found[:NAMED_CAP * 2], missing
+
+
+def screen_ok(size: float | None, want: float) -> bool:
+    """"จอ 16" = รุ่นจอ 16.x ทั้งหมด (ไม่รวม 15.6) / "จอ 15.6" = 15.6 พอดี"""
+    if size is None:
+        return False
+    if want == int(want):
+        return int(size) == int(want)
+    return abs(size - want) < 0.05
+
+
+def _match(lp: dict, fl: dict) -> bool:
+    if fl["price_max"] and lp["price"] > fl["price_max"]:
+        return False
+    if fl["price_min"] and lp["price"] < fl["price_min"]:
+        return False
+    if fl["ram_gb"] and lp["ram_gb"] != fl["ram_gb"]:
+        return False
+    if fl["ram_min"] and lp["ram_gb"] < fl["ram_min"]:
+        return False
+    if fl["gpu"] and not gpu_matches(lp["gpu"], re.sub(r"([a-z])(\d)", r"\1 \2", fl["gpu"].lower())):
+        return False
+    if fl["gpu_family"] and lp["gpu_family"] != fl["gpu_family"]:
+        return False
+    if fl["cpu"] and fl["cpu"].lower() not in lp["cpu"].lower():
+        return False
+    if fl["brand"] and fl["brand"].lower() != lp["brand"].lower():
+        return False
+    if fl["series"] and fl["series"].lower() not in lp["name"].lower():
+        return False
+    if fl["screen"] and not screen_ok(lp["screen"], fl["screen"]):
+        return False
+    if fl.get("res_w") and lp["res_w"] != fl["res_w"]:
+        return False
+    if fl.get("res_h") and lp["res_h"] != fl["res_h"]:
+        return False
+    if fl.get("res_min") and (lp["res_w"] or 0) < fl["res_min"]:
+        return False
+    if fl.get("res_gt") and (lp["res_w"] or 0) <= fl["res_gt"]:
+        return False
+    if fl.get("ssd_gen") and lp["ssd_gen"] not in fl["ssd_gen"]:
+        return False
+    if fl.get("storage_gb") and lp["storage_gb"] != fl["storage_gb"]:
+        return False
+    if fl.get("storage_min") and (lp["storage_gb"] or 0) < fl["storage_min"]:
+        return False
+    if fl.get("os") and fl["os"] not in lp["os"].lower():
+        return False
+    return True
+
+
+def _size(gb: int) -> str:
+    return f"{gb / 1000:g}TB" if gb >= 1000 else f"{gb}GB"
+
+
+def describe(fl: dict) -> str:
+    """เงื่อนไขเป็นภาษาคน เช่น "แรม 24GB · ราคาไม่เกิน 30,000 บาท" (ว่าง = ไม่ได้กรอง)"""
+    parts = []
+    if fl["brand"]:
+        parts.append(f"ยี่ห้อ {fl['brand']}")
+    if fl["series"]:
+        parts.append(f"ซีรีส์ {fl['series']}")
+    if fl["gpu"]:
+        parts.append(f"การ์ดจอ {fl['gpu']}")
+    if fl["gpu_family"]:
+        parts.append(f"การ์ดจอกลุ่ม {fl['gpu_family'].upper()}")
+    if fl["cpu"]:
+        parts.append(f"CPU {fl['cpu']}")
+    if fl["ram_gb"]:
+        parts.append(f"แรม {fl['ram_gb']}GB")
+    if fl["ram_min"]:
+        parts.append(f"แรม {fl['ram_min']}GB ขึ้นไป")
+    if fl["screen"]:
+        parts.append(f"จอ {fl['screen']:g} นิ้ว")
+    if fl.get("res_w"):
+        parts.append(f"ความละเอียดจอ {fl['res_w']}x{fl['res_h']}" if fl.get("res_h")
+                     else f"ความละเอียดจอแนวนอน {fl['res_w']} พิกเซล")
+    if fl.get("res_min"):
+        parts.append(f"ความละเอียดจอแนวนอน {fl['res_min']} พิกเซลขึ้นไป")
+    if fl.get("res_gt"):
+        parts.append(f"ความละเอียดจอแนวนอนมากกว่า {fl['res_gt']} พิกเซล")
+    if fl.get("ssd_gen"):
+        parts.append("SSD Gen " + " หรือ ".join(str(g) for g in fl["ssd_gen"]))
+    if fl.get("storage_gb"):
+        parts.append(f"ความจุ {_size(fl['storage_gb'])}")
+    if fl.get("storage_min"):
+        parts.append(f"ความจุ {_size(fl['storage_min'])} ขึ้นไป")
+    if fl.get("os"):
+        parts.append(OS_WORDS.get(fl["os"], fl["os"]))
+    if fl["price_min"] and fl["price_max"]:
+        parts.append(f"ราคา {fl['price_min']:,}–{fl['price_max']:,} บาท")
+    elif fl["price_max"]:
+        parts.append(f"ราคาไม่เกิน {fl['price_max']:,} บาท")
+    elif fl["price_min"]:
+        parts.append(f"ราคาตั้งแต่ {fl['price_min']:,} บาท")
+    if fl["price_target"]:
+        parts.append(f"ราคาใกล้ {fl['price_target']:,} บาท")
+    return " · ".join(parts)
+
+
+def select(plan: dict, question: str, trace: dict | None = None) -> dict:
+    """คืน {"items": [...], "notes": [...], "named_missing": [...]} เรียงตามลำดับที่ควรนำเสนอ"""
+    started = time.perf_counter()
+    cat, fl, intent = catalog(), plan["filters"], plan["intent"]
+    named, missing = resolve_models(plan["models"])
+    notes, source = [], "filter"
+
+    if intent in ("lookup", "compare") and named:
+        items, source = list(named), "named"
+        if fl["price_max"] or fl["price_min"]:
+            over = [lp for lp in items if not _match(lp, fl)]
+            if over:
+                notes.append("รุ่นที่ลูกค้าเอ่ยถึงมีในร้าน แต่ราคาอยู่นอกงบ: "
+                             + ", ".join(f"{lp['name']} ({lp['price']:,} บาท)" for lp in over[:6])
+                             + " — ให้บอกว่ามีแต่เกินงบ ห้ามบอกว่าไม่มีในข้อมูล")
     else:
-        reviews = _query_by_type(q_emb, k_review, "review", budget, min_price, trace=searches)
+        items = [lp for lp in cat if _match(lp, fl)]
+        if named and intent in ("list", "rank", "recommend"):
+            narrowed = [lp for lp in items if lp in named]
+            items = narrowed or items
+            over = [lp for lp in named if lp not in items]
+            if over and (fl["price_max"] or fl["price_min"]):
+                notes.append("รุ่นที่ลูกค้าเอ่ยถึงมีในร้าน แต่ราคาอยู่นอกงบ: "
+                             + ", ".join(f"{lp['name']} ({lp['price']:,} บาท)" for lp in over[:6]))
+        if items and fl["price_target"]:
+            # "ราคาประมาณ X" = ช่วง ±15% ไม่ใช่ทุกรุ่นเรียงตามความใกล้ (ไล่ 13 รุ่นตั้งแต่ 25k ถึง 54k ไม่ตอบโจทย์)
+            t = fl["price_target"]
+            band = [lp for lp in items if t * (1 - PRICE_BAND) <= lp["price"] <= t * (1 + PRICE_BAND)]
+            if band:
+                items = band
+            else:
+                items = sorted(items, key=lambda lp: (abs(lp["price"] - t), lp["price"]))[:RECOMMEND_POOL]
+                source = "nearest"
+                notes.append(f"ไม่มีรุ่นที่ราคาใกล้ {t:,} บาท (±{PRICE_BAND:.0%}) — รายการคือรุ่นที่ราคาใกล้ที่สุด "
+                             "ให้บอกลูกค้าตรง ๆ แล้วเสนอรุ่นเหล่านี้")
+        if not items and any(fl[k] for k in ("price_max", "price_min", "price_target")):
+            # ไม่มีรุ่นในช่วงราคาเลย -> ตัดเงื่อนไขราคาออก แล้วเสนอรุ่นที่ราคาใกล้ที่สุด
+            loose = [lp for lp in cat if _match(lp, {**fl, "price_max": None, "price_min": None})]
+            target = fl["price_target"] or fl["price_max"] or fl["price_min"]
+            items = sorted(loose, key=lambda lp: (abs(lp["price"] - target), lp["price"]))[:RECOMMEND_POOL]
+            source = "nearest"
+            notes.append(f"ไม่มีรุ่นที่ตรงทุกเงื่อนไข ({describe(fl)}) — รายการด้านล่างคือรุ่นที่ราคาใกล้ที่สุด "
+                         f"ให้บอกลูกค้าตรง ๆ ว่าไม่มีรุ่นในช่วงราคานี้ แล้วเสนอรุ่นเหล่านี้แทน")
 
-    # ถามถึงรุ่นถูกสุด/แพงสุด -> ยัดเอกสารสเปกของรุ่นนั้นไว้หัวแถวเสมอ
-    # ไม่งั้น AI จะรู้แค่ชื่อกับราคาจากเอกสารภาพรวมร้าน แล้วตอบได้ไม่ครบตามรูปแบบ
-    extreme = _extreme_spec_doc(question, budget)
-    if extreme and extreme not in specs:
-        specs = [extreme] + specs[:-1]
-        if adjust is not None:
-            source[extreme] = "extreme"
-            adjust.append(f"ถามถึงรุ่นถูก/แพงที่สุด -> ใส่ {doc_name(extreme)} ไว้หัวแถว")
+    # ลำดับ
+    sims = {}
+    if plan["sort"]:
+        key = SORT_FIELDS[plan["sort"]["by"]]
+        items.sort(key=lambda lp: (lp[key], lp["price"]) if plan["sort"]["order"] == "asc"
+                   else (-lp[key], lp["price"]))
+    elif source != "nearest" and fl["price_target"]:
+        items.sort(key=lambda lp: (abs(lp["price"] - fl["price_target"]), lp["price"]))
+    elif source != "nearest" and (plan["usage"] or intent == "recommend") and items:
+        # เรียงตามความใกล้เคียงระหว่าง "การใช้งาน" (หรือทั้งคำถาม) กับเอกสารของแต่ละรุ่น
+        t0 = time.perf_counter()
+        q_vec = np.asarray(get_embedder().encode([plan["usage"] or question], normalize_embeddings=True))[0]
+        vecs = doc_vectors()
+        index = {lp["name"]: i for i, lp in enumerate(cat)}
+        sims = {lp["name"]: float(vecs[index[lp["name"]]] @ q_vec) for lp in items}
+        items.sort(key=lambda lp: -sims[lp["name"]])
+        if trace is not None:
+            trace["embed"] = {"model": EMBED_MODEL, "dims": int(q_vec.shape[0]),
+                              "ms": round((time.perf_counter() - t0) * 1000), "load_ms": 0,
+                              "preview": [round(float(v), 4) for v in q_vec[:8]]}
+    elif source not in ("named",):
+        items.sort(key=lambda lp: lp["price"])
 
-    # ลูกค้าเอ่ยสเปกหรือชื่อรุ่นตรง ๆ -> รุ่นที่ตรงจากข้อมูลจริงขึ้นหัวแถว ตามด้วยผล vector search
-    exact, asked = exact_match(question, budget, min_price)
-    if exact:
-        rest = [d for d in specs if d not in exact]
-        specs = exact + rest[: max(2, k_spec - len(exact))]
-        named_reviews = _reviews_of(asked, EXACT_REVIEWS)
-        reviews = named_reviews + [r for r in reviews if r not in named_reviews]
-        if adjust is not None:
-            source.update(dict.fromkeys(exact, "exact"))
-            source.update(dict.fromkeys(named_reviews, "exact"))
-            adjust += [d for d in exact if d.startswith("ผลค้นตรงตามสเปก")]
-            if asked:
-                adjust.append(f"ลูกค้าเอ่ยชื่อรุ่น -> ดึงสเปกและรีวิวมาตรง ๆ: {', '.join(asked)}")
+    total = len(items)
+    if intent == "list":
+        keep = LIST_CAP
+    elif intent == "rank":
+        keep = max(plan["limit"] or 1, RANK_TOP)
+    elif intent == "recommend":
+        keep = max(plan["limit"] or 1, RECOMMEND_POOL)
+    elif intent in ("lookup", "compare"):
+        keep = plan["limit"] or NAMED_CAP
+    else:
+        keep = 0
+    items = items[:keep]
+    if intent == "list" and total > LIST_CAP:
+        notes.append(f"ตรงเงื่อนไขทั้งหมด {total} รุ่น แสดง {LIST_CAP} รุ่นแรก")
 
-    # แนบภาพรวมร้านทุกครั้ง — ตอบคำถามแบบ "มีกี่รุ่น / ถูกสุดเท่าไหร่" ได้โดยไม่กินโควตาค้นหา
-    summary = get_summary_doc()
-    context = specs + reviews + ([summary] if summary else [])
     if trace is not None:
-        if summary:
-            source[summary] = "summary"
-        # สิ่งที่ AI เห็นจริง ตามลำดับใน prompt (ต่อท้ายระดับคะแนนแบบเดียวกับ build_prompt)
-        trace["context"] = [{"source": source.get(d, "vector"), "kind": doc_kind(d), "text": with_levels(d)}
-                            for d in context]
         trace["search_ms"] = round((time.perf_counter() - started) * 1000)
-    return context, over_budget
+        trace["adjust"] = ([f"เงื่อนไข: {describe(fl)}"] if describe(fl) else []) + notes \
+            + ([f"หาชื่อรุ่นไม่เจอ: {', '.join(missing)}"] if missing else [])
+        if sims:
+            trace["searches"] = [{"type": "spec", "want": len(items), "filter": describe(fl) or "ไม่กรอง",
+                                  "hits": [{"name": lp["name"], "price": lp["price"], "similarity": round(sims[lp["name"]], 4)}
+                                           for lp in items]}]
+        trace["context"] = [{"source": source, "kind": "spec", "text": lp["doc"]} for lp in items]
+    return {"items": items, "total": total, "notes": notes, "missing": missing, "source": source}
 
 
-def doc_kind(doc: str) -> str:
-    if is_summary_doc(doc):
-        return "summary"
-    if doc.startswith("รีวิวจากผู้ใช้รุ่น"):
-        return "review"
-    if doc.startswith("ผลค้นตรงตามสเปก"):
-        return "note"
-    return "spec"
+# ═════════════════════════ 7. ตอบ (เรียก LLM ครั้งที่ 2 แบบสตรีม) ═════════════════════════
+OUTSIDE_BRANDS = ("macbook", "apple", "dell", "thinkpad", "surface", "razer", "alienware", "samsung", "huawei", "microsoft")
+BRAND_CASE = {"macbook": "MacBook", "thinkpad": "ThinkPad", "alienware": "Alienware"}
+EMPTY_ANSWER = "(โมเดลคิดยาวจน token หมดก่อนตอบ ลองถามใหม่อีกครั้งนะ)"
+
+ANSWER_RULES = """คุณคือ "Tech Buddy" พนักงานแนะนำโน้ตบุ๊คของร้าน (ข้อมูล 99 รุ่น) พูดสุภาพเป็นกันเองแบบเพื่อนที่รู้เรื่องโน้ตบุ๊ค
+ลงท้ายด้วย "ครับ" (คำเดียว ไม่ซ้ำเป็น "ครับครับ") เรียกลูกค้าว่า "คุณ" ช่วยลูกค้าตัดสินใจอย่างจริงใจ ไม่ยัดเยียด ไม่กดดัน
+ไม่ต้องทักทายหรือขึ้นต้นด้วย "สวัสดี" ให้เริ่มตอบคำถามเลย
+กฎ:
+1. ใช้เฉพาะข้อมูลใน "รายการที่ระบบคัดมา" และ "ข้อมูลร้าน" ห้ามแต่งรุ่น ราคา สเปก หรือคะแนน และห้ามใช้ความรู้นอกข้อมูล
+2. ระดับคะแนน (เริ่มต้น / กลาง / กลาง-สูง / สูง) และส่วนต่างงบ ใช้ตามที่ระบบเขียนไว้ ห้ามคำนวณหรือเดาใหม่
+3. เขียนชื่อรุ่นเต็มตามรายการทุกครั้ง
+4. ถ้ามีหมายเหตุจากระบบ ให้ทำตามหมายเหตุนั้น
+5. ตอบตามรูปแบบใน "งานของคุณ" ใช้ markdown (หัวข้อด้วย **ตัวหนา** และ bullet "-") ห้ามใช้ตาราง
+6. ใส่รายละเอียดให้ครบตามที่ "งานของคุณ" บอก ไม่ต้องย่อ ลูกค้าอยากเห็นข้อมูลก่อนตัดสินใจ
+7. ถ้ารายการมีรุ่นสินค้า (ยกเว้นคำถามภาพรวมร้าน) ปิดท้ายคำตอบด้วยหัวข้อ **คำแนะนำจาก Tech Buddy** 2-3 ประโยค:
+   ถ้าให้เลือก รุ่นไหนในรายการน่าซื้อที่สุดสำหรับลูกค้าคนนี้ เพราะอะไร (อ้างสเปก ราคา หรือรีวิว)
+   แล้วชวนคุยต่อแบบเป็นกันเอง เช่น ให้ช่วยเทียบรุ่น ดูสเปกเพิ่ม หรือบอกการใช้งานเพื่อเลือกให้ตรงขึ้น
+   - เสนอได้เฉพาะรุ่นในรายการ ห้ามพูดถึงรุ่นอื่น
+   - ห้ามพูดถึงโปรโมชั่น ส่วนลด ของแถม สต็อก การผ่อน หรือการรับประกัน เพราะไม่มีในข้อมูล
+   - ห้ามเร่งให้ซื้อ เช่น บอกให้รีบตัดสินใจ หรือบอกว่าของใกล้หมด"""
+
+# รูปแบบรายละเอียดของ 1 รุ่น (ใช้ซ้ำในหลายประเภทคำถาม)
+FULL_SPEC = ("'- **สเปก:** CPU ... (คะแนน X ระดับ...) / GPU ... (คะแนน X ระดับ...) / แรม ... / ความจุ ... / จอ ... / OS' "
+             "'- **เหมาะกับ:** งานที่สเปกและรีวิวบอกว่าทำได้ดี' '- **ข้อดี:** 2 ข้อจากรีวิว' '- **ข้อควรรู้:** 1-2 ข้อจากรีวิว'")
+LIST_FULL_MAX = 15   # รายชื่อไม่เกินนี้ ใส่สเปกหลักทุกรุ่น / ยาวกว่านี้ใส่เฉพาะสเปกที่ลูกค้าถาม (คำตอบจะยาวเกินไป)
+
+TASKS = {
+    "list": ("ไล่ชื่อ **ครบทุกรุ่นในรายการ ({n} รุ่น)** ตามลำดับเดิม ห้ามตัดหรือข้าม ห้ามเพิ่มรุ่นนอกรายการ "
+             "เริ่มด้วย 1 ประโยคบอกว่ามีทั้งหมดกี่รุ่น แล้วรุ่นละ 1 bullet: {list_line}"),
+    "rank": ("รุ่นแรกในรายการคือคำตอบ (เรียงตามเกณฑ์ที่ลูกค้าถามแล้ว) ถ้ารุ่นต้น ๆ มีค่าเท่ากันให้บอกว่าเท่ากัน "
+             "เขียนหัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** บอกค่าตามเกณฑ์ (คะแนนหรือราคา) แล้วตามด้วย " + FULL_SPEC +
+             " จากนั้นหัวข้อ **อันดับถัดไป** อีก 2 รุ่น บรรทัดละรุ่น: ชื่อรุ่นเต็ม — ราคา — ค่าตามเกณฑ์ — CPU / GPU"),
+    "recommend": ("แนะนำ {n} รุ่นแรกในรายการ (ระบบเรียงตามความเหมาะสมแล้ว) รุ่นละหัวข้อ "
+                  "**ชื่อรุ่นเต็ม — ราคา X บาท** (+ ส่วนต่างงบตามที่ระบบเขียน) แล้วตามด้วย " + FULL_SPEC +
+                  " ถ้าแนะนำมากกว่า 1 รุ่น ตามด้วย **สรุปเปรียบเทียบ** ว่าแต่ละรุ่นเด่นเรื่องไหน "
+                  "ถ้าลูกค้ายังไม่บอกการใช้งาน ให้ถามการใช้งานในส่วนคำแนะนำท้ายคำตอบ"),
+    "lookup": ("ตอบสิ่งที่ลูกค้าถามให้ตรงคำถามก่อนในประโยคแรก (ถ้าคำถามเลือกรุ่นตามเกณฑ์ เช่น ตัวที่ถูกกว่า ให้ตอบรุ่นแรกในรายการ) "
+               "แล้วให้รายละเอียดของรุ่นนั้นใต้หัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** ตามด้วย " + FULL_SPEC),
+    "compare": ("เทียบทุกรุ่นในรายการ รุ่นละหัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** ตามด้วย " + FULL_SPEC +
+                " แล้วปิดด้วย **สรุปเปรียบเทียบ**: ต่างกันตรงไหน (CPU GPU แรม จอ) และแต่ละรุ่นเหมาะกับใคร{diff}"),
+    "overview": ("ตอบตรงคำถามจาก 'ข้อมูลร้าน' ในประโยคแรก แล้วขยายให้น่าอ่าน: "
+                 "ถ้าถามราคาเริ่มต้น/ถูกสุด หรือราคาสูงสุด/แพงสุด ให้เขียนหัวข้อ **ชื่อรุ่นเต็ม — ราคา X บาท** ของรุ่นนั้นจากรายการ "
+                 "ตามด้วย '- **สเปก:** ...' และ '- **จุดเด่น:** 1-2 ข้อจากรีวิว' / "
+                 "ถ้าถามยี่ห้อ ให้ไล่ทุกยี่ห้อพร้อมจำนวนรุ่นและช่วงราคา / ถ้าถามจำนวนรุ่น ให้บอกจำนวนแยกยี่ห้อด้วย "
+                 "แล้วปิดด้วย 1-2 ประโยคชวนบอกการใช้งานหรืองบ เพื่อช่วยเลือกรุ่นที่ใช่ (ไม่ต้องมีหัวข้อคำแนะนำ)"),
+}
+
+TEMPLATES = {
+    "offtopic": "เรื่องนี้ผมตอบไม่ได้ครับ ผมช่วยได้เฉพาะเรื่องเลือกโน้ตบุ๊ค ตอนนี้มองหาโน้ตบุ๊คไว้ใช้ทำอะไร งบประมาณประมาณเท่าไหร่ครับ?",
+    "greeting": "สวัสดีครับ ผม Tech Buddy ช่วยเลือกโน้ตบุ๊คจาก 99 รุ่นในร้านครับ ตอนนี้มองหาโน้ตบุ๊คไว้ใช้ทำอะไร งบประมาณประมาณเท่าไหร่ครับ?",
+    "general": "ขอโทษครับ ข้อมูลที่ผมมีไม่ครอบคลุมเรื่องนี้ครับ ถ้าอยากให้ช่วยเลือกโน้ตบุ๊ค บอกงบและการใช้งานมาได้เลยครับ",
+    "not_in_store": ("ขอโทษครับ ไม่มี{thing}ในข้อมูลที่ผมมีครับ ในร้านมียี่ห้อ Lenovo, Asus, MSI, Acer, HP, HyperX และ Gigabyte "
+                     "ถ้าบอกงบและการใช้งาน ผมช่วยเลือกรุ่นที่ใกล้เคียงให้ได้ครับ"),
+}
 
 
-def doc_name(doc: str) -> str:
-    """ชื่อรุ่นจากเอกสารสเปก/รีวิว (รูปแบบมาจาก build_index.py)"""
-    return doc.removeprefix("รีวิวจากผู้ใช้รุ่น ").split(" ราคา ")[0]
+# ---- 7.1 เงื่อนไขที่ยังคัดไม่ได้ -> บอกลูกค้าตรง ๆ (ข้อความสำเร็จรูป หรือประโยคนำต้นคำตอบ) ----
+def _thai_join(words: list[str]) -> str:
+    if len(words) == 1:
+        return words[0]
+    return ", ".join(words[:-1]) + " และ" + (" " if words[-1][:1].isascii() else "") + words[-1]
+
+
+def _pad(text: str) -> str:
+    """เว้นวรรคระหว่างคำไทยกับคำอังกฤษ เช่น "ตาม" + "Gen ของ SSD" + "ให้" -> "ตาม Gen ของ SSD ให้" """
+    return (" " if text[:1].isascii() else "") + text + (" " if text[-1:].isascii() else "")
+
+
+def unsupported_reply(plan: dict) -> str | None:
+    """ลูกค้าถามแต่เรื่องที่ยังคัดไม่ได้ (ไม่มีเงื่อนไขอื่น ไม่ระบุรุ่น ไม่บอกการใช้งาน) -> ตอบตรง ๆ แทนการส่งรุ่นที่ไม่ได้กรอง"""
+    labels, intent = plan.get("unsupported") or [], plan["intent"]
+    if not labels or plan["models"]:
+        return None
+    if intent == "overview" or (intent in ("list", "recommend", "rank")
+                                and not plan["usage"] and not describe(plan["filters"])):
+        return (f"ตอนนี้ผมยังคัดรุ่นตาม{_pad(_thai_join(labels))}ให้ไม่ได้ครับ ระบบค้นได้ตาม{SEARCHABLE} "
+                "ถ้าสนใจรุ่นไหน ถามสเปกของรุ่นนั้นได้เลย หรือบอกงบและการใช้งาน ผมช่วยเลือกให้ได้ครับ")
+    return None
+
+
+def unsupported_lead(plan: dict) -> str:
+    """มีเงื่อนไขอื่นที่คัดได้ด้วย -> โค้ดใส่ประโยคนี้ไว้ต้นคำตอบเอง (ไม่ฝากให้ AI จำ)"""
+    labels = plan.get("unsupported") or []
+    if not labels or plan["intent"] not in ("list", "recommend", "rank") or unsupported_reply(plan):
+        return ""
+    used = describe(plan["filters"]).split(" · ") if describe(plan["filters"]) else []
+    if plan["models"]:
+        used.append("รุ่นที่คุณถามถึง")
+    if plan["usage"]:
+        used.append("การใช้งานที่คุณบอก")
+    return (f"ผมยังคัดรุ่นตาม{_pad(_thai_join(labels))}ให้ไม่ได้ครับ "
+            f"รายการด้านล่างจึงคัดตาม{_pad(_thai_join(used))}อย่างเดียว ถ้าสนใจรุ่นไหน ถามสเปกของรุ่นนั้นต่อได้เลย\n\n")
+
+
+# ---- 7.2 ประกอบ prompt ของขั้นตอบ ----
+def _price_note(lp: dict, fl: dict) -> str:
+    """ส่วนต่างงบ คำนวณด้วยโค้ด (LLM บวกลบเลขพลาดได้ เช่น 25,000 - 24,990 ตอบเป็น 1 แทนที่จะเป็น 10)"""
+    if fl["price_max"]:
+        diff = fl["price_max"] - lp["price"]
+        return f"อยู่ในงบ เหลือ {diff:,} บาท" if diff >= 0 else f"เกินงบ {-diff:,} บาท"
+    if fl["price_target"]:
+        diff = lp["price"] - fl["price_target"]
+        return "ตรงราคาที่ต้องการ" if diff == 0 else (f"แพงกว่าที่ต้องการ {diff:,} บาท" if diff > 0
+                                                    else f"ถูกกว่าที่ต้องการ {-diff:,} บาท")
+    return ""
+
+
+def _spec_hint(plan: dict) -> str:
+    if plan["detail"]:
+        return "CPU, GPU, แรม, จอ, ความจุ และคะแนน CPU/GPU"
+    fl, bits = plan["filters"], []
+    if fl["ram_gb"] or fl["ram_min"]:
+        bits.append("แรม")
+    if fl["gpu"] or fl["gpu_family"]:
+        bits.append("การ์ดจอ")
+    if fl["cpu"]:
+        bits.append("CPU")
+    if fl["screen"] or fl.get("res_w") or fl.get("res_min") or fl.get("res_gt"):
+        bits.append("จอ")
+    if fl.get("ssd_gen") or fl.get("storage_gb") or fl.get("storage_min"):
+        bits.append("ความจุ")
+    if fl.get("os"):
+        bits.append("OS")
+    return ", ".join(bits or ["CPU", "การ์ดจอ", "แรม"])
+
+
+def _list_line(plan: dict, n: int) -> str:
+    """รูปแบบบรรทัดของคำตอบแบบรายชื่อ — รายชื่อสั้นใส่สเปกหลักครบ รายชื่อยาวใส่เฉพาะที่ลูกค้าถาม"""
+    if plan["detail"] or n <= LIST_FULL_MAX:
+        line = ("'- **ชื่อรุ่นเต็ม** — X บาท — CPU ... (ระดับ...) · GPU ... (ระดับ...) · แรม ... · ความจุ ... · จอ ...'")
+        if plan["detail"]:
+            line += " ต่อด้วยคะแนน CPU/GPU และจุดเด่นจากรีวิว 1 ข้อ"
+        return line
+    return f"'- **ชื่อรุ่นเต็ม** — X บาท — {_spec_hint(plan)}'"
+
+
+def _understood(plan: dict) -> str:
+    fl = plan["filters"]
+    bits = [f"ประเภทคำถาม: {plan['intent']}"]
+    if describe(fl):
+        bits.append(f"เงื่อนไข: {describe(fl)}")
+    if plan["sort"]:
+        bits.append(f"เรียงตาม {plan['sort']['by']} ({'มากไปน้อย' if plan['sort']['order'] == 'desc' else 'น้อยไปมาก'})")
+    if plan["usage"]:
+        bits.append(f"การใช้งาน: {plan['usage']}")
+    if plan["limit"]:
+        bits.append(f"จำนวนที่ขอ: {plan['limit']}")
+    return " | ".join(bits)
+
+
+def build_answer_prompt(plan: dict, picked: dict, question: str, history: list) -> str:
+    items, fl, intent = picked["items"], plan["filters"], plan["intent"]
+    lines = []
+    for i, lp in enumerate(items, 1):
+        note = _price_note(lp, fl)
+        lines.append(f"{i}. {lp['doc']}" + (f" | {note}" if note else ""))
+    diff = ""
+    if intent == "compare" and len(items) == 2:
+        d = abs(items[0]["price"] - items[1]["price"])
+        diff = f" และบอกส่วนต่างราคา {d:,} บาท (ระบบคำนวณแล้ว)"
+    n = plan["limit"] or 1
+    task = TASKS[intent].format(n=len(items) if intent == "list" else n, diff=diff,
+                                list_line=_list_line(plan, len(items)))
+    notes = list(picked["notes"])
+    scoped = describe(fl) or plan["models"] or picked["source"] in ("named", "overview")
+    if scoped:
+        head = f"{len(items)} รุ่น จากที่ตรงเงื่อนไข {picked['total']} รุ่น"
+    else:
+        # ไม่ได้กรองอะไรเลย: ถ้าลูกค้าถามเงื่อนไขที่ตัวจับไม่รู้จัก ห้าม AI อ้างว่ารายการนี้ตรงเงื่อนไข
+        head = f"{len(items)} รุ่น จากทั้งร้าน {picked['total']} รุ่น ไม่ได้กรองตามสเปก"
+        if intent == "list":
+            notes.append("ระบบไม่ได้กรองตามสเปก ถ้าคำถามของลูกค้ามีเงื่อนไขที่ไม่อยู่ใน 'ระบบเข้าใจว่า' "
+                         "ห้ามบอกว่ารุ่นในรายการตรงเงื่อนไขนั้น ให้บอกตรง ๆ ว่ายังคัดตามเรื่องนั้นไม่ได้")
+    notes = "\n".join(f"- {x}" for x in notes) or "-"
+    return (f"บทสนทนาก่อนหน้า:\n{_history_text(history)}\n\n"
+            f"คำถามลูกค้า: {question}\n"
+            f"ระบบเข้าใจว่า: {_understood(plan)}\n"
+            f"ข้อมูลร้าน: {store_stats()}\n"
+            f"หมายเหตุจากระบบ:\n{notes}\n\n"
+            f"รายการที่ระบบคัดมา ({head} เรียงตามลำดับที่ควรนำเสนอ):\n"
+            + ("\n".join(lines) or "(ไม่มี)") +
+            f"\n\nงานของคุณ: {task}")
+
+
+# ---- 7.3 เก็บกวาดข้อความที่ AI พิมพ์ (ตัด <think>, ครับครับ) ----
+_THINK_OPEN = "<think>"
+_RE_DOUBLE_KRAB = re.compile(r"ครับ(?:[ \t]*ครับ)+")
 
 
 def strip_think(text: str) -> str:
-    """ตัดบล็อก <think>...</think> ทิ้ง เหลือเฉพาะคำตอบจริง (โมเดลเป็น reasoning model)"""
+    """ตัดบล็อก <think>...</think> ทิ้ง เหลือเฉพาะคำตอบจริง (โมเดลบางตัวเป็น reasoning model)"""
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     # เผื่อกรณีแท็กเปิดหายไป เหลือแต่แท็กปิด
     cleaned = re.sub(r"^.*?</think>", "", cleaned, flags=re.DOTALL)
@@ -926,235 +1343,19 @@ def strip_think(text: str) -> str:
     return cleaned.strip()
 
 
-# ดึง "ชื่อรุ่น + ราคา" ออกจากเอกสารสเปก เพื่อคำนวณส่วนต่างงบให้ LLM
-# (LLM บวกลบเลขพลาดได้ เช่น 25,000 - 24,990 ตอบเป็น 1 แทนที่จะเป็น 10)
-_SPEC_PRICE_RE = re.compile(r"^(.+?) ราคา ([\d,]+) บาท \|")
+def visible_answer(raw: str) -> str:
+    """ส่วนของคำตอบที่โชว์ระหว่างสตรีมได้ — ตัด <think> แบบเดียวกับคำตอบสุดท้าย (บล็อกที่ยังคิดไม่จบ
+    ก็ตัด) และกั๊กท้ายที่อาจเป็นแท็กเปิดที่มายังไม่ครบ เช่น "<thi" ไม่งั้นแท็กจะโผล่ให้เห็นแวบหนึ่ง"""
+    text = strip_think(raw)
+    for n in range(len(_THINK_OPEN) - 1, 0, -1):
+        if text.endswith(_THINK_OPEN[:n]):
+            return text[:-n].rstrip()
+    return text
 
 
-def budget_diff_table(context: list[str], budget: int) -> str:
-    """ตารางส่วนต่างงบที่คำนวณด้วยโค้ด ไม่ปล่อยให้ LLM คิดเลขเอง"""
-    lines = []
-    for doc in context:
-        # เอกสารภาพรวมร้านมีรูปแบบ "... ราคา 12,990 บาท | ..." เหมือนเอกสารสเปก
-        # ถ้าไม่กันไว้ regex จะจับมันเป็น "รุ่น" ปลอมที่ชื่อยาวทั้งประโยค
-        if is_summary_doc(doc):
-            continue
-        m = _SPEC_PRICE_RE.match(doc)
-        if not m:
-            continue
-        name, price = m.group(1), int(m.group(2).replace(",", ""))
-        if price <= budget:
-            lines.append(f"- {name}: ราคา {price:,} บาท -> อยู่ในงบ เหลืออีก {budget - price:,} บาท")
-        else:
-            lines.append(f"- {name}: ราคา {price:,} บาท -> เกินงบไป {price - budget:,} บาท")
-    if not lines:
-        return ""
-    return (
-        "\nส่วนต่างงบ (คำนวณมาให้แล้ว ให้คัดลอกตัวเลขนี้ไปใช้ ห้ามคำนวณเอง):\n"
-        + "\n".join(lines) + "\n"
-    )
-
-
-# ---- ระดับคะแนนเบนช์มาร์ก (คำนวณด้วยโค้ดตามเกณฑ์ใน SYSTEM_PROMPT) ----
-# LLM เทียบตัวเลขกับช่วงพลาดบ่อย (ทดสอบกับ Gemma: GPU 10,500 ถูกเขียนว่า "เริ่มต้น-กลาง"
-# ทั้งที่อยู่ช่วง 8,000-14,000 = "กลาง-สูง") จึงคำนวณให้แล้วแนบท้ายเอกสารสเปก แบบเดียวกับส่วนต่างงบ
-# แก้เกณฑ์ใน SYSTEM_PROMPT ต้องแก้ตัวเลขที่นี่ด้วย
-CPU_LEVELS = ((18_000, "เริ่มต้น"), (25_000, "กลาง"), (32_000, "กลาง-สูง"))
-GPU_LEVELS = ((4_000, "เริ่มต้น"), (8_000, "เริ่มต้น-กลาง"), (14_000, "กลาง-สูง"))
-_SCORE_RE = re.compile(r"คะแนนเบนช์มาร์ก CPU (\d+) / GPU (\d+)$")
-
-
-def score_level(score: int, levels: tuple) -> str:
-    for upper, name in levels:
-        if score < upper:
-            return name
-    # ขอบบนของช่วงสุดท้ายนับเป็นช่วงนั้น เช่น GPU 14,000 พอดี = กลาง-สูง (เกณฑ์เขียน "8,000–14,000")
-    return levels[-1][1] if score == levels[-1][0] else "สูง"
-
-
-def with_levels(doc: str) -> str:
-    """ต่อท้ายเอกสารสเปกด้วยระดับคะแนนที่คำนวณแล้ว (เอกสารรีวิว/ภาพรวมคืนค่าเดิม)"""
-    m = _SCORE_RE.search(doc)
-    if not m or doc.startswith("รีวิวจากผู้ใช้รุ่น"):
-        return doc
-    cpu, gpu = int(m.group(1)), int(m.group(2))
-    # เขียนแค่ชื่อระดับเปล่า ๆ — โครงคำตอบมีคำว่า "อยู่ในระดับ[...]" อยู่แล้ว
-    # (เคยใส่ "CPU ระดับกลาง" แล้วโมเดลคัดลอกไปเป็น "อยู่ในระดับระดับกลาง")
-    return (f"{doc} | ระดับคะแนน (คำนวณแล้ว): CPU = {score_level(cpu, CPU_LEVELS)} / "
-            f"GPU = {score_level(gpu, GPU_LEVELS)}")
-
-
-def build_prompt(
-    question: str,
-    context: list[str],
-    history: list,
-    budget: int | None = None,
-    over_budget: bool = False,
-    min_price: int | None = None,
-    no_think: bool = False,
-) -> str:
-    """ประกอบข้อความทั้งก้อนที่จะส่งให้ LLM
-    แยกออกมาจาก generate() เพื่อให้ /debug ดู prompt ตัวจริงได้โดยไม่ต้องเรียก LLM
-    (ถ้าปล่อยให้ประกอบคนละที่ สองฝั่งจะเพี้ยนจากกันเมื่อแก้โค้ดภายหลัง)
-
-    โมเดล 8B รับ system role ได้ไม่ดีเท่ารุ่นใหญ่ เลยยุบ system + ประวัติ + context + คำถาม
-    ไว้ใน user message เดียว
-    """
-    context_text = "\n".join(f"- {with_levels(c)}" for c in context)
-
-    history_text = ""
-    if history:
-        recent = history[-HISTORY_FOR_LLM:]  # ประวัติล่าสุดให้ AI จำบริบท
-        history_text = "\n".join(
-            f"{'ลูกค้า' if h['role'] == 'user' else 'ผู้ช่วย'}: {h['content']}"
-            for h in recent
-        )
-
-    # บอก AI ให้ชัดว่า context ถูกกรองราคามาแล้ว (หรือกรองแล้วไม่เจอ) จะได้ไม่แนะนำเกินงบ
-    budget_note = ""
-    if budget is not None and over_budget:
-        # ระบุรุ่นที่ใกล้งบที่สุดให้ชัดเจน ไม่งั้นโมเดลจะหยิบรุ่นแพงที่ความหมายใกล้คำถาม
-        # มาบอกว่า "ใกล้เคียงงบที่สุด" ทั้งที่มีรุ่นถูกกว่าอยู่
-        nearest = _specs_nearest_to(budget, min_price, n=1)
-        nearest_note = ""
-        if nearest:
-            price, doc = nearest[0]
-            name = doc.split(" ราคา ")[0]
-            nearest_note = (
-                f"รุ่นที่ราคาใกล้งบที่สุดคือ {name} ราคา {price:,} บาท "
-                f"(เกินงบไป {price - budget:,} บาท) — ให้เสนอรุ่นนี้ ห้ามเสนอรุ่นอื่นว่าใกล้เคียงกว่า\n"
-            )
-        budget_note = (
-            f"\n**งบของลูกค้า: ไม่เกิน {budget:,} บาท — ไม่มีรุ่นไหนในข้อมูลที่ราคาไม่เกินงบนี้เลย**\n"
-            f"ให้บอกลูกค้าตรง ๆ ว่าไม่มีรุ่นในงบ แล้วบอกชัดว่าราคาเกินงบไปเท่าไหร่\n"
-            + nearest_note
-        )
-    elif budget is not None:
-        budget_note = (
-            f"\n**งบของลูกค้า: ไม่เกิน {budget:,} บาท — ข้อมูลสินค้าด้านล่างคัดมาเฉพาะรุ่นที่ราคาไม่เกินงบแล้ว**\n"
-            f"ห้ามแนะนำรุ่นที่ราคาเกิน {budget:,} บาท และห้ามเอ่ยถึงรุ่นที่ไม่ได้อยู่ในข้อมูลด้านล่าง\n"
-            f"ทุกรุ่นด้านล่างราคาไม่เกินงบแล้ว ดังนั้นห้ามเขียนว่า 'เกินงบ' เด็ดขาด\n"
-        )
-    # คำถามแบบ "ราคาอยู่ระหว่าง X-Y" ต้องย้ำขอบล่างด้วย ไม่งั้นโมเดลจะเสนอรุ่นถูกกว่าช่วงที่ขอ
-    if min_price is not None and budget is not None:
-        budget_note = (
-            f"\n**ลูกค้าต้องการรุ่นที่ราคาอยู่ระหว่าง {min_price:,} ถึง {budget:,} บาท**\n"
-            f"ห้ามเสนอรุ่นที่ถูกกว่า {min_price:,} บาท หรือแพงกว่า {budget:,} บาท เด็ดขาด "
-            f"ข้อมูลสินค้าด้านล่างคัดมาเฉพาะรุ่นที่อยู่ในช่วงนี้แล้ว\n"
-        )
-
-    if budget is not None:
-        budget_note += budget_diff_table(context, budget)
-    else:
-        # ไม่มีงบ -> ต้องสั่งให้ชัด ไม่งั้นโมเดลจะแถว่า "อยู่ในงบ เหลืออีก 0 บาท" ขึ้นมาเอง
-        budget_note = (
-            "\n**ลูกค้ายังไม่ได้บอกงบ** — ห้ามเอ่ยถึงงบ เงินที่เหลือ หรือส่วนต่างราคาใด ๆ "
-            "ในคำตอบเด็ดขาด ช่อง [หมายเหตุราคา] ให้เว้นว่างไว้ เขียนแค่ราคาเฉย ๆ\n"
-        )
-
-    suffix = " /no_think" if no_think else ""
-    # คำถาม "รุ่นถูก/แพงที่สุด" โมเดลมักเจอคำตอบในเอกสารภาพรวมร้านแล้วตอบสั้นแค่ชื่อกับราคา
-    # ต้องวางคำสั่งไว้ "ท้ายสุดติดกับคำถาม" ซึ่งเป็นตำแหน่งที่โมเดลให้น้ำหนักมากที่สุด
-    # (วางไว้ก่อนข้อมูลสินค้าแล้วไม่ได้ผล ทดสอบแล้วทำตามแค่ 1 ใน 3 ครั้ง)
-    extreme_note = ""
-    if _RE_CHEAPEST.search(question) or _RE_PRICIEST.search(question):
-        extreme_note = (
-            "\n\n(คำถามนี้ถามถึงรุ่นที่ถูก/แพงที่สุด ให้ถือเป็นการแนะนำรุ่น "
-            "ต้องตอบด้วยโครงเต็มทุกหัวข้อ: เหตุผล (CPU/GPU/RAM/STORAGE/ราคา), สรุปเบนช์มาร์ก, "
-            "ข้อดี, ข้อเสีย โดยสเปกของรุ่นนั้นอยู่ใน 'ข้อมูลสินค้า' ด้านบนแล้ว "
-            "ห้ามตอบแค่ชื่อกับราคาเด็ดขาด)"
-        )
-
-    # ลูกค้าขอหลายรุ่น/ขอเทียบ -> สั่งให้สลับไปใช้โครงเปรียบเทียบ (วางท้ายสุดเช่นกัน)
-    n_models = wanted_model_count(question)
-    if n_models:
-        extreme_note = (
-            f"\n\n(คำถามนี้ลูกค้าขอ {n_models} รุ่นเพื่อเปรียบเทียบ "
-            f"**ห้ามตอบแค่รุ่นเดียวเด็ดขาด** ให้ใช้ 'รูปแบบคำตอบเมื่อลูกค้าขอหลายรุ่น' "
-            f"คือไล่รุ่นที่ 1-{n_models} พร้อมหัวข้อย่อยครบทุกรุ่น "
-            f"แล้วปิดท้ายด้วยหัวข้อ 'สรุปเปรียบเทียบ' "
-            f"เลือกจากรุ่นที่อยู่ใน 'ข้อมูลสินค้า' ด้านบนเท่านั้น)"
-        )
-
-    # ลูกค้าขอรายชื่อ ("แรม 24 มีตัวไหนบ้าง") และโค้ดกรองรายการให้แล้ว -> ไล่ชื่อให้ครบ
-    # ไม่งั้นโครงเปรียบเทียบ 3 รุ่นด้านบนจะตัดเหลือ 3 ตัว ทั้งที่ตรงเงื่อนไข 13 รุ่น
-    listed = any(c.startswith(EXACT_NOTE) and "มีทั้งหมด" in c for c in context)
-    if HYBRID_FILTERS and listed and _RE_LIST.search(question):
-        extreme_note = (
-            "\n\n(คำถามนี้ลูกค้าขอรายชื่อรุ่น ให้ไล่ชื่อ **ครบทุกรุ่น** ตามรายการใน 'ผลค้นตรงตามสเปก' "
-            "ตามลำดับเดิม บรรทัดละรุ่น พร้อมราคา และสเปกที่ลูกค้าถามถึง ห้ามเพิ่มรุ่นที่ไม่อยู่ในรายการ "
-            "ห้ามตัดให้เหลือไม่กี่รุ่น แล้วปิดด้วยสรุปสั้น ๆ 1-2 ประโยค ไม่ต้องใช้โครงแนะนำเต็ม)"
-        )
-
-    return f"""{SYSTEM_PROMPT}
-
-ประวัติบทสนทนา:
-{history_text if history_text else "(เริ่มต้นใหม่)"}
-{budget_note}
-ข้อมูลสินค้า:
-{context_text}
-
-คำถามลูกค้า: {question}{extreme_note}{suffix}"""
-
-
-EMPTY_ANSWER = "(โมเดลคิดยาวจน token หมดก่อนตอบ ลองถามใหม่อีกครั้งนะ)"
-
-
-class LLMError(Exception):
-    """เรียก LLM ไม่สำเร็จ — ข้อความใช้แสดงให้ผู้ใช้เห็นได้เลย"""
-
-
-def generate(
-    question: str,
-    context: list[str],
-    history: list,
-    budget: int | None = None,
-    over_budget: bool = False,
-    min_price: int | None = None,
-    provider: dict | None = None,
-    trace: dict | None = None,
-) -> str:
-    """RAG v1: ส่ง prompt ก้อนเดียวไปที่ endpoint แบบ OpenAI ของ provider ที่เลือก
-    trace (โหมด debug): บันทึก prompt ทั้งก้อน ค่าที่ส่งไป เวลา โทเคน และความคิดของโมเดล (ถ้ามี)"""
-    # เรียกด้วย requests ตรง ๆ (gateway ของ ThaiLLM บล็อก header ที่ openai library แนบมา)
-    provider = provider or llm.pick(None)[0]
-    if provider is None:
-        raise LLMError("ยังไม่มี AI ที่ใช้งานได้ — ตั้งค่าใน .env / providers.json ก่อน")
-
-    no_think = llm.wants_no_think_suffix(provider, DISABLE_THINKING)
-    user_msg = build_prompt(question, context, history, budget, over_budget, min_price,
-                            no_think=no_think)
-    body = {
-        "model": provider["model"],
-        "messages": [{"role": "user", "content": user_msg}],
-        # 0.1 แทน 0.2 — ยิ่งต่ำยิ่งตอบนิ่ง รูปแบบคำตอบคงเส้นคงวาขึ้น
-        "temperature": 0.1,
-        # ปิดโหมดคิด -> 512 พอ / เปิดโหมดคิด -> เผื่อ token ให้ส่วนคิดเยอะหน่อย
-        "max_tokens": 512 if no_think else provider.get("max_tokens", 1536),
-    }
-    if trace is not None:
-        trace["prompt"] = user_msg
-        trace["llm"] = {"provider": provider["label"], "model": provider["model"],
-                        "temperature": body["temperature"], "max_tokens": body["max_tokens"]}
-
-    headers = {"Content-Type": "application/json"}
-    if provider.get("api_key"):
-        headers["Authorization"] = f"Bearer {provider['api_key']}"
-
-    started = time.perf_counter()
-    try:
-        resp = requests.post(f"{provider['base_url']}/chat/completions",
-                             headers=headers, json=body, timeout=120)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        raise LLMError(f"{provider['label']} error: {e} — เช็ค API key หรือ endpoint") from e
-
-    data = resp.json()
-    choice = data["choices"][0]
-    raw = choice["message"].get("content") or ""
-    if trace is not None:
-        trace["llm"].update(llm_trace(data, raw, time.perf_counter() - started))
-    return strip_think(raw) or EMPTY_ANSWER
+def tidy(text: str) -> str:
+    """เก็บกวาดคำตอบ: "ครับครับ" -> "ครับ" """
+    return _RE_DOUBLE_KRAB.sub("ครับ", text)
 
 
 def llm_trace(data: dict, raw: str, seconds: float) -> dict:
@@ -1173,66 +1374,89 @@ def llm_trace(data: dict, raw: str, seconds: float) -> dict:
     }
 
 
-# ---- ข้อมูลโน้ตบุ๊คดิบ (laptops.json) ----
-# rag_v2 ใช้คัดตามสเปก ส่วน RAG v1 ใช้ค้นตรงตามชื่อรุ่น/สเปก (exact_match) เสริม vector search
-_laptops: list[dict] | None = None
-_spec_doc_by_name: dict[str, str] | None = None
+# ---- 7.4 คัดรุ่น + ตอบ ----
+def respond_stream(plan: dict, question: str, history: list, provider: dict, trace: dict | None = None,
+                   result: dict | None = None):
+    """ทยอยส่งคำตอบ: yield {"type": "delta" | "replace", "text"} ระหว่างที่ AI พิมพ์
+    แล้วใส่คำตอบสุดท้ายไว้ที่ result["answer"]"""
+    result = {} if result is None else result
+    intent = plan["intent"]
+    canned = unsupported_reply(plan)
+    if intent in TEMPLATED or canned:
+        thing = "รุ่นนั้น"
+        if intent == "not_in_store":
+            words = [w for w in OUTSIDE_BRANDS if w in question.lower()]
+            if words:
+                thing = f" {BRAND_CASE.get(words[0], words[0].capitalize())} "
+        text = canned or TEMPLATES[intent].format(thing=thing)
+        if trace is not None:
+            trace["llm"] = {"provider": "ข้อความสำเร็จรูป (ไม่เรียก AI รอบสอง)",
+                            "model": "unsupported" if canned else intent,
+                            "temperature": 0, "max_tokens": 0, "ms": 0, "usage": None,
+                            "finish_reason": "stop", "thinking": "", "raw_chars": len(text)}
+        result["answer"] = text
+        return
+
+    if intent == "overview":
+        cat = catalog()
+        ends = [min(cat, key=lambda x: x["price"]), max(cat, key=lambda x: x["price"])]
+        picked = {"items": ends, "total": len(cat), "missing": [], "source": "overview",
+                  "notes": ["รายการคือรุ่นที่ถูกที่สุดและแพงที่สุดในร้าน — ใช้เมื่อคำถามเกี่ยวกับราคาเริ่มต้นหรือราคาสูงสุด"]}
+        if trace is not None:
+            trace["context"] = [{"source": "overview", "kind": "spec", "text": lp["doc"]} for lp in ends]
+    else:
+        picked = select(plan, question, trace)
+    lead = unsupported_lead(plan)
+    if lead:
+        picked["notes"].append(f"ลูกค้าถามเรื่อง{_pad(_thai_join(plan['unsupported']))}ด้วย แต่ระบบยังคัดตามเรื่องนี้ไม่ได้ "
+                               "รายการคัดตามเงื่อนไขอื่นเท่านั้น ห้ามสรุปว่ารุ่นในรายการตรงหรือไม่ตรงเรื่องนี้ "
+                               "ระบบแจ้งลูกค้าไว้ต้นคำตอบแล้ว ไม่ต้องพูดซ้ำ")
+    prompt = build_answer_prompt(plan, picked, question, history)
+    max_tokens = 6000 if intent == "list" else 3000
+    meta, raw, shown = {}, "", ""
+    if lead:
+        yield {"type": "delta", "text": lead}
+        shown = lead
+    for piece in complete_stream(provider, [{"role": "system", "content": ANSWER_RULES},
+                                            {"role": "user", "content": prompt}], max_tokens=max_tokens, meta=meta):
+        raw += piece
+        text = lead + tidy(visible_answer(raw))
+        if text == shown:
+            continue
+        # ตัด <think> อาจทำให้ข้อความที่โชว์ไปแล้วหายไป -> ส่งทั้งก้อนแทน
+        yield ({"type": "delta", "text": text[len(shown):]} if text.startswith(shown)
+               else {"type": "replace", "text": text})
+        shown = text
+    if trace is not None:
+        trace["prompt"] = ANSWER_RULES + "\n\n" + prompt
+        data = {"choices": [{"message": {"reasoning": meta.get("thinking") or None},
+                             "finish_reason": meta.get("finish_reason")}], "usage": meta.get("usage")}
+        trace["llm"] = {"provider": provider["label"], "model": provider["model"], "temperature": 0.1,
+                        "max_tokens": max_tokens, **llm_trace(data, raw, meta.get("seconds", 0))}
+    result["answer"] = lead + (tidy(strip_think(raw)) or EMPTY_ANSWER)
 
 
-def get_laptops() -> list[dict]:
-    global _laptops
-    if _laptops is None:
-        _laptops = json.loads(LAPTOPS_PATH.read_text(encoding="utf-8"))
-    return _laptops
+def respond(plan: dict, question: str, history: list, provider: dict, trace: dict | None = None) -> str:
+    """ตอบแบบรอทั้งก้อน (/chat) — ใช้ขั้นตอนเดียวกับแบบสตรีม"""
+    result = {}
+    for _ in respond_stream(plan, question, history, provider, trace, result):
+        pass
+    return result["answer"]
 
 
-def get_spec_doc_by_name() -> dict[str, str]:
-    global _spec_doc_by_name
-    if _spec_doc_by_name is None:
-        res = get_collection().get(where={"type": {"$eq": "spec"}}, include=["documents", "metadatas"])
-        _spec_doc_by_name = {m["name"]: d for m, d in zip(res["metadatas"], res["documents"])}
-    return _spec_doc_by_name
-
-
-def _ram_gb(ram: str) -> int:
-    m = re.search(r"(\d+)\s*GB", ram or "", re.IGNORECASE)
-    return int(m.group(1)) if m else 0
-
-
-# ---- สตรีมคำตอบไปที่หน้าเว็บ (/chat/stream) ----
-# ทยอยส่ง event เป็น Server-Sent Events แต่ละ event คือบรรทัด "data: {json}" ตามด้วยบรรทัดว่าง:
-#   {"type": "status",  "text": ...}   ระบบกำลังทำอะไร
-#   {"type": "delta",   "text": ...}   ข้อความคำตอบที่เพิ่งพิมพ์ต่อท้าย
-#   {"type": "replace", "text": ...}   ทิ้งข้อความที่โชว์ไปแล้วแล้วใช้ค่านี้แทน (เจอ <think>)
-#   {"type": "done",    "message": ..., "meta": ..., "commit": ...}   คำตอบสุดท้ายที่ต้องใช้จริง
-#   {"type": "error",   "error": ...}
-STATUS_SEARCHING = "กำลังค้นข้อมูลในร้าน…"
-STATUS_WRITING = "กำลังเรียบเรียงคำตอบ…"
-
-
-_THINK_OPEN = "<think>"
-
-
-def visible_answer(raw: str) -> str:
-    """ส่วนของคำตอบที่โชว์ระหว่างสตรีมได้ — ตัด <think> แบบเดียวกับคำตอบสุดท้าย (บล็อกที่ยังคิดไม่จบ
-    ก็ตัด) และกั๊กท้ายที่อาจเป็นแท็กเปิดที่มายังไม่ครบ เช่น "<thi" ไม่งั้นแท็กจะโผล่ให้เห็นแวบหนึ่ง"""
-    text = strip_think(raw)
-    for n in range(len(_THINK_OPEN) - 1, 0, -1):
-        if text.endswith(_THINK_OPEN[:n]):
-            return text[:-n].rstrip()
-    return text
-
-
-def sse(event: dict) -> str:
-    # json.dumps escape การขึ้นบรรทัดใหม่ในข้อความให้แล้ว หนึ่ง event จึงเป็นบรรทัดเดียวเสมอ
-    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-
-# ---- บันทึกประวัติหลังสตรีมจบ ----
+# ═════════════════════════ 8. จำบทสนทนา (session cookie) ═════════════════════════
 # session ของ Flask อยู่ใน cookie ซึ่งต้องส่งไปพร้อม header — แต่กว่า /chat/stream จะรู้คำตอบครบ
 # header ถูกส่งไปนานแล้ว จึงแนบ "commit token" ไปกับ event done ให้หน้าเว็บยิงกลับมาที่ /chat/commit
 # token เซ็นด้วย secret_key: ผู้ใช้แก้เนื้อหาคำตอบที่จะเข้าไปอยู่ใน context ของ LLM รอบหน้าไม่ได้
 COMMIT_MAX_AGE = 600   # วินาที
+
+
+def memory(plan: dict) -> dict:
+    """เงื่อนไขที่จำไว้ใช้ตีความข้อความถัดไป (เก็บใน session cookie — ต้องเล็ก)"""
+    if plan["intent"] in TEMPLATED or plan["intent"] == "overview":
+        return {}
+    return {"intent": plan["intent"], "filters": {k: v for k, v in plan["filters"].items() if v},
+            "models": plan["models"][:4], "usage": plan["usage"]}
 
 
 def _commit_serializer() -> URLSafeTimedSerializer:
@@ -1262,6 +1486,21 @@ def save_turn(history: list, question: str, answer: str) -> None:
     session["history"] = history[-MAX_HISTORY_MSGS:]
 
 
+# ═════════════════════════ 9. endpoint ของหน้าเว็บ ═════════════════════════
+# /chat/stream ทยอยส่ง event เป็น Server-Sent Events แต่ละ event คือบรรทัด "data: {json}" ตามด้วยบรรทัดว่าง:
+#   {"type": "status",  "text": ...}   ระบบกำลังทำอะไร
+#   {"type": "delta",   "text": ...}   ข้อความคำตอบที่เพิ่งพิมพ์ต่อท้าย
+#   {"type": "replace", "text": ...}   ทิ้งข้อความที่โชว์ไปแล้วแล้วใช้ค่านี้แทน (เจอ <think>)
+#   {"type": "done",    "message": ..., "meta": ..., "commit": ...}   คำตอบสุดท้ายที่ต้องใช้จริง
+#   {"type": "error",   "error": ...}
+STATUS_WRITING = "กำลังเรียบเรียงคำตอบ…"
+
+
+def sse(event: dict) -> str:
+    # json.dumps escape การขึ้นบรรทัดใหม่ในข้อความให้แล้ว หนึ่ง event จึงเป็นบรรทัดเดียวเสมอ
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
 @app.context_processor
 def static_version():
     """เลขเวอร์ชันต่อท้าย URL ของ CSS/JS ในหน้าเว็บ (= เวลาแก้ไฟล์ล่าสุด)
@@ -1282,142 +1521,12 @@ def index():
     return render_template("index.html")
 
 
-def _chat_request():
-    """ตรวจ request ของ /chat และ /chat/stream (รูปแบบ, ความยาว, AI ที่เลือก, rate limit)
-    แล้วอ่านงบจากข้อความ คืน (ข้อมูลที่พร้อมใช้, None) หรือ (None, response error)
-
-    งบต้องเขียนลง session ที่นี่ ก่อนเริ่มตอบ — /chat/stream ส่ง header (รวม cookie) ไปตั้งแต่ event แรก
-    """
-    # silent=True: body ที่ไม่ใช่ JSON ต้องได้ error เป็น JSON ไม่ใช่หน้า HTML 400
-    # (ไม่งั้น fetch ฝั่งหน้าเว็บจะ parse ไม่ได้แล้วขึ้นว่า "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้" ซึ่งทำให้เข้าใจผิด)
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return None, (jsonify({"error": "ส่งข้อมูลมาไม่ถูกรูปแบบ (ต้องเป็น JSON)"}), 400)
-
-    user_msg = (data.get("message") or "").strip()
-    if not user_msg:
-        return None, (jsonify({"error": "empty message"}), 400)
-    if len(user_msg) > MAX_MSG_LEN:
-        # กันข้อความยาวผิดปกติมาถ่วงเธรด (gunicorn มีแค่ 1 worker)
-        return None, (jsonify({"error": f"ข้อความยาวเกินไป (สูงสุด {MAX_MSG_LEN:,} ตัวอักษร)"}), 413)
-
-    # AI ที่ผู้ใช้เลือกจากหน้าเว็บ (ไม่ส่งมา = ใช้ค่าเริ่มต้นใน .env)
-    provider, pick_error = llm.pick(data.get("provider"))
-    if pick_error:
-        return None, (jsonify({"error": pick_error}), 400)
-
-    if too_many_requests(client_ip()):
-        return None, (jsonify({
-            "error": f"ถามถี่เกินไปครับ (จำกัด {RATE_LIMIT_PER_MIN} ข้อความต่อนาที) "
-                     f"รอสักครู่แล้วลองใหม่นะครับ"
-        }), 429)
-
-    history = session.get("history", [])
-
-    # หางบจากข้อความล่าสุดก่อน ถ้าไม่มีค่อยใช้งบที่เคยจำไว้ใน session
-    # (เช่น รอบก่อนบอก "งบ 20000" รอบนี้ถามแค่ "มีรุ่นอื่นอีกไหม" ก็ยังต้องอยู่ในงบเดิม)
-    # เก็บงบแยกจาก history เพราะ history ถูกตัดให้สั้นเพื่อคุมขนาด cookie
-    budget = extract_budget(user_msg)
-    min_price = extract_min_price(user_msg)
-    budget_from = "message" if budget is not None else None
-    if budget is None:
-        # ข้อความนี้ไม่ได้บอกราคา -> ใช้ของเดิมทั้งคู่ (ขอบบนกับขอบล่างต้องไปด้วยกันเสมอ
-        # ไม่งั้นถาม "อยากดูรุ่นอื่น" ต่อจาก "ราคา 30,000-40,000" จะหลุดช่วงไปทั้งหมด)
-        budget = session.get("budget")
-        min_price = session.get("budget_min")
-        budget_from = "session" if budget is not None else None
-    else:
-        session["budget"] = budget
-        if min_price is None:
-            session.pop("budget_min", None)
-        else:
-            session["budget_min"] = min_price
-
-    return {"message": user_msg, "provider": provider, "history": history,
-            "budget": budget, "min_price": min_price, "budget_from": budget_from,
-            # ขอดูกระบวนการคิดได้เฉพาะตอนผู้ดูแลเปิด DEBUG_PANEL ไว้ (ปิดอยู่ = ไม่สนค่าที่ส่งมา)
-            "debug": DEBUG_PANEL and data.get("debug") is True}, None
-
-
-def new_trace(job: dict) -> dict | None:
-    """จุดเริ่มของข้อมูล debug: ระบบตีความคำถามว่าอะไร ก่อนเริ่มค้น (None = ไม่ได้ขอ debug)"""
-    if not job["debug"]:
-        return None
-    q = job["message"]
-    return {
-        "query": {
-            "budget": job["budget"],
-            "min_price": job["min_price"],
-            "budget_from": job["budget_from"],
-            "model_count": wanted_model_count(q),
-            "cheapest": bool(_RE_CHEAPEST.search(q)),
-            "priciest": bool(_RE_PRICIEST.search(q)),
-            "gpu_terms": gpu_terms(q),
-            "asked_models": asked_model_names(q),
-            "history_msgs": min(len(job["history"]), HISTORY_FOR_LLM),
-        },
-    }
-
-
-def chat_meta(job: dict, started: float) -> dict:
-    # หน้าเว็บแสดงบรรทัดเล็ก ๆ ใต้คำตอบว่า AI ตัวไหนตอบ ใช้เวลาเท่าไหร่
-    provider = job["provider"]
-    return {
-        "provider": provider["id"],
-        "provider_label": provider.get("short") or provider["label"],
-        "elapsed": round(time.time() - started, 1),
-    }
-
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    # endpoint หลัก: รับข้อความ -> ค้นหา (retrieve) -> แต่งคำตอบ (generate) -> ตอบเป็น JSON ก้อนเดียว
-    # (หน้าเว็บใช้ /chat/stream ที่ทยอยส่งความคืบหน้า — อันนี้ไว้ให้สคริปต์ / ชุดทดสอบเรียกง่าย ๆ)
-    job, error = _chat_request()
-    if error:
-        return error
-    user_msg, provider, history = job["message"], job["provider"], job["history"]
-    budget, min_price = job["budget"], job["min_price"]
-
-    # จับเวลาตั้งแต่ก่อนค้น — เวลาใน meta ต้องตรงกับที่ผู้ใช้รอจริง (ค้น + LLM)
-    started = time.time()
-    trace = new_trace(job)
-    debug_part = {"debug": trace} if trace is not None else {}
-    if use_v2(job):
-        try:
-            plan = rag_v2.understand(user_msg, history, session.get("last_query"), provider, trace)
-            session["last_query"] = rag_v2.memory(plan)
-            answer = rag_v2.respond(plan, user_msg, history, provider, trace)
-        except LLMError as e:
-            return jsonify({"error": str(e), **debug_part}), 502
-        except Exception as e:
-            return jsonify({"error": f"RAG error: {e}", **debug_part}), 500
-        save_turn(history, user_msg, answer)
-        return jsonify({"message": answer, "meta": chat_meta(job, started), **debug_part})
-    try:
-        context, over_budget = retrieve(user_msg, budget=budget, min_price=min_price, trace=trace)
-    except Exception as e:
-        return jsonify({"error": f"Vector search error: {e}", **debug_part}), 500
-
-    try:
-        answer = generate(user_msg, context, history, budget=budget,
-                          over_budget=over_budget, min_price=min_price, provider=provider,
-                          trace=trace)
-    except LLMError as e:
-        return jsonify({"error": str(e), **debug_part}), 502
-    except Exception as e:
-        return jsonify({"error": f"LLM error: {e}", **debug_part}), 500
-
-    save_turn(history, user_msg, answer)
-    return jsonify({"message": answer, "meta": chat_meta(job, started), **debug_part})
-
-
 @app.route("/chat/stream", methods=["POST"])
 def chat_stream():
-    """เหมือน /chat แต่ตอบเป็น Server-Sent Events: บอกสถานะระหว่างทาง แล้วทยอยส่งคำตอบตามที่ AI พิมพ์
-    (RAG v1 ส่งคำตอบทีเดียวตอนจบ)
+    """endpoint หลักของหน้าเว็บ: ตีความ -> คัดรุ่น -> ตอบ แบบ Server-Sent Events
+    บอกสถานะระหว่างทาง แล้วทยอยส่งคำตอบตามที่ AI พิมพ์
 
-    error ที่รู้ก่อนเริ่มตอบ (JSON พัง, ถามถี่เกิน ...) ตอบเป็น JSON + status code แบบเดียวกับ /chat
+    error ที่รู้ก่อนเริ่มตอบ (JSON พัง, ถามถี่เกิน, ตีความไม่ได้ ...) ตอบเป็น JSON + status code แบบเดียวกับ /chat
     ส่วน error ระหว่างสตรีมส่งเป็น event {"type": "error"} เพราะ status 200 ถูกส่งไปแล้ว
     ประวัติแชทบันทึกผ่าน /chat/commit (ดู commit_token)
     """
@@ -1425,75 +1534,66 @@ def chat_stream():
     if error:
         return error
     user_msg, provider, history = job["message"], job["provider"], job["history"]
-    budget, min_price = job["budget"], job["min_price"]
 
     started = time.time()
     # ขอดูกระบวนการคิด -> แนบไปกับ event สุดท้าย (done หรือ error) ทั้งก้อน
     trace = new_trace(job)
     debug_part = {"debug": trace} if trace is not None else {}
 
-    if use_v2(job):
-        # RAG รุ่น 2: ตีความคำถามก่อนเริ่มสตรีม — เงื่อนไขที่ได้ต้องเขียนลง session ซึ่งส่งไปกับ header
-        try:
-            plan = rag_v2.understand(user_msg, history, session.get("last_query"), provider, trace)
-        except LLMError as e:
-            return jsonify({"error": str(e), **debug_part}), 502
-        session["last_query"] = rag_v2.memory(plan)
-
-        def events_v2():
-            yield sse({"type": "status", "text": STATUS_WRITING})
-            result = {}
-            try:
-                # ทยอยส่งคำตอบระหว่างที่ AI พิมพ์ คำตอบยาวก็เริ่มเห็นข้อความได้ทันที
-                for ev in rag_v2.respond_stream(plan, user_msg, history, provider, trace, result):
-                    yield sse(ev)
-                answer = result["answer"]
-            except LLMError as e:
-                yield sse({"type": "error", "error": str(e), **debug_part})
-                return
-            except Exception as e:
-                yield sse({"type": "error", "error": f"RAG error: {e}", **debug_part})
-                return
-            yield sse({"type": "done", "message": answer, "meta": chat_meta(job, started),
-                       "commit": commit_token(user_msg, answer), **debug_part})
-
-        return Response(events_v2(), mimetype="text/event-stream", headers={
-            "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    # ตีความคำถามก่อนเริ่มสตรีม — เงื่อนไขที่ได้ต้องเขียนลง session ซึ่งส่งไปกับ header
+    try:
+        plan = understand(user_msg, history, session.get("last_query"), provider, trace)
+    except LLMError as e:
+        return jsonify({"error": str(e), **debug_part}), 502
+    session["last_query"] = memory(plan)
 
     # ทุกอย่างที่ต้องใช้จาก request/session อ่านมาครบแล้ว — generator นี้ทำงานหลังส่ง header
     # จึงไม่แตะ session อีก (เขียนไปก็ไม่ถูกบันทึก)
     def events():
-        yield sse({"type": "status", "text": STATUS_SEARCHING})
+        yield sse({"type": "status", "text": STATUS_WRITING})
+        result = {}
         try:
-            context, over_budget = retrieve(user_msg, budget=budget, min_price=min_price, trace=trace)
-        except Exception as e:
-            yield sse({"type": "error", "error": f"Vector search error: {e}", **debug_part})
-            return
-
-        try:
-            yield sse({"type": "status", "text": STATUS_WRITING})
-            answer = generate(user_msg, context, history, budget=budget,
-                              over_budget=over_budget, min_price=min_price, provider=provider,
-                              trace=trace)
+            # ทยอยส่งคำตอบระหว่างที่ AI พิมพ์ คำตอบยาวก็เริ่มเห็นข้อความได้ทันที
+            for ev in respond_stream(plan, user_msg, history, provider, trace, result):
+                yield sse(ev)
+            answer = result["answer"]
         except LLMError as e:
             yield sse({"type": "error", "error": str(e), **debug_part})
             return
         except Exception as e:
-            yield sse({"type": "error", "error": f"LLM error: {e}", **debug_part})
+            yield sse({"type": "error", "error": f"RAG error: {e}", **debug_part})
             return
-
-        yield sse({
-            "type": "done",
-            "message": answer,
-            "meta": chat_meta(job, started),
-            "commit": commit_token(user_msg, answer),
-            **debug_part,
-        })
+        yield sse({"type": "done", "message": answer, "meta": chat_meta(job, started),
+                   "commit": commit_token(user_msg, answer), **debug_part})
 
     return Response(events(), mimetype="text/event-stream", headers={
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",   # บอก nginx ไม่ให้กั๊ก response ไว้รอจนครบ
     })
+
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    # เหมือน /chat/stream แต่ตอบเป็น JSON ก้อนเดียวตอนจบ — ไว้ให้สคริปต์ / ชุดทดสอบเรียกง่าย ๆ
+    job, error = _chat_request()
+    if error:
+        return error
+    user_msg, provider, history = job["message"], job["provider"], job["history"]
+
+    # จับเวลาตั้งแต่ก่อนตีความ — เวลาใน meta ต้องตรงกับที่ผู้ใช้รอจริง (ตีความ + คัดรุ่น + ตอบ)
+    started = time.time()
+    trace = new_trace(job)
+    debug_part = {"debug": trace} if trace is not None else {}
+    try:
+        plan = understand(user_msg, history, session.get("last_query"), provider, trace)
+        session["last_query"] = memory(plan)
+        answer = respond(plan, user_msg, history, provider, trace)
+    except LLMError as e:
+        return jsonify({"error": str(e), **debug_part}), 502
+    except Exception as e:
+        return jsonify({"error": f"RAG error: {e}", **debug_part}), 500
+    save_turn(history, user_msg, answer)
+    return jsonify({"message": answer, "meta": chat_meta(job, started), **debug_part})
 
 
 @app.route("/chat/commit", methods=["POST"])
@@ -1520,83 +1620,18 @@ def providers():
     return jsonify({**llm.public_list(), "debug": DEBUG_PANEL})
 
 
-@app.route("/debug", methods=["POST"])
-def debug():
-    """ดู "ข้อมูลดิบ" ที่ระบบหามาได้ ก่อนถูกส่งไปให้ ThaiLLM แต่งเป็นคำตอบ
-    ไม่เรียก LLM เลย จึงตอบทันทีและไม่เปลืองโควตา
-
-    ใช้ตอบคำถามว่า "ที่บอทตอบแบบนี้ เพราะมันเห็นข้อมูลอะไร"
-    เปิดใช้ด้วย ENABLE_DEBUG=true (ปิดไว้เป็นค่าเริ่มต้น เพราะ endpoint นี้เปิดเผย prompt ทั้งก้อน)
-    """
-    if not ENABLE_DEBUG:
-        return jsonify({"error": "ปิดอยู่ — ตั้ง ENABLE_DEBUG=true ใน .env เพื่อเปิด"}), 403
-
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify({"error": "ส่งข้อมูลมาไม่ถูกรูปแบบ (ต้องเป็น JSON)"}), 400
-    question = (data.get("message") or "").strip()
-    if not question:
-        return jsonify({"error": "empty message"}), 400
-
-    budget = extract_budget(question)
-    min_price = extract_min_price(question)
-    if budget is None:
-        budget = session.get("budget")
-        min_price = session.get("budget_min")
-
-    try:
-        context, over_budget = retrieve(question, budget=budget, min_price=min_price)
-    except Exception as e:
-        return jsonify({"error": f"Vector search error: {e}"}), 500
-
-    # แยกประเภทเอกสารให้ดูง่าย
-    specs, reviews, summary = [], [], []
-    for d in context:
-        if is_summary_doc(d):
-            summary.append(d)
-        elif d.startswith("รีวิวจากผู้ใช้รุ่น"):
-            reviews.append(d)
-        else:
-            specs.append(d)
-
-    return jsonify({
-        "คำถาม": question,
-        "สิ่งที่ระบบตีความได้": {
-            "งบที่อ่านได้ (เพดานบน)": budget,
-            "ราคาขั้นต่ำ (ถ้าถามเป็นช่วง)": min_price,
-            "ไม่มีรุ่นไหนในช่วงราคา": over_budget,
-            "ขอกี่รุ่น": wanted_model_count(question),
-            "ถามถึงรุ่นถูกสุด": bool(_RE_CHEAPEST.search(question)),
-            "ถามถึงรุ่นแพงสุด": bool(_RE_PRICIEST.search(question)),
-        },
-        "เอกสารที่ดึงมา": {
-            "รวม": len(context),
-            "สเปก": specs,
-            "รีวิว": reviews,
-            "ภาพรวมร้าน": summary,
-        },
-        "ตารางส่วนต่างงบ": budget_diff_table(context, budget) if budget else None,
-        "prompt_ที่จะส่งให้_LLM": build_prompt(
-            question, context, session.get("history", []), budget, over_budget, min_price
-        ),
-    })
-
-
 @app.route("/new_chat", methods=["POST"])
 def new_chat():
-    # ล้างประวัติบทสนทนาใน session เพื่อเริ่มสนทนาใหม่ (ล้างงบที่จำไว้ด้วย)
+    # ล้างประวัติบทสนทนาและเงื่อนไขที่จำไว้ เพื่อเริ่มสนทนาใหม่
     session["history"] = []
-    session.pop("budget", None)
-    # ขอบล่างต้องล้างคู่กับงบเสมอ ไม่งั้นแชทใหม่ที่ไม่บอกงบจะโดนกรองด้วยราคาขั้นต่ำของแชทเก่า
-    session.pop("budget_min", None)
-    session.pop("last_query", None)   # เงื่อนไขที่ RAG รุ่น 2 จำไว้ใช้กับคำถามถัดไป
+    session.pop("last_query", None)
     return jsonify({"ok": True})
 
 
 @app.route("/restore", methods=["POST"])
 def restore():
     """โหลดบทสนทนาเก่าที่หน้าเว็บเก็บไว้ใน localStorage กลับเข้า session ฝั่งเซิร์ฟเวอร์
-    เพื่อให้กดดูแชทเก่าจาก sidebar แล้วคุยต่อได้จริง (ของเดิมกดแล้วไม่เกิดอะไรขึ้น)
+    เพื่อให้กดดูแชทเก่าจาก sidebar แล้วคุยต่อได้จริง
 
     ข้อมูลมาจากฝั่งผู้ใช้ จึงต้องตรวจรูปแบบและตัดความยาวก่อนเสมอ —
     ไม่งั้นจะกลายเป็นช่องยัดข้อความปลอมในบท "ผู้ช่วย" เข้าไปใน context ของ LLM
@@ -1611,20 +1646,8 @@ def restore():
         if isinstance(m, dict) and m.get("role") in ("user", "assistant") and m.get("content")
     ]
     session["history"] = clean
-
-    # ตั้งงบใหม่จากข้อความล่าสุดของผู้ใช้ในบทสนทนาที่โหลดกลับมา
-    session.pop("budget", None)
-    session.pop("budget_min", None)
-    for m in reversed(clean):
-        if m["role"] == "user":
-            found = extract_budget(m["content"])
-            if found is not None:
-                session["budget"] = found
-                min_price = extract_min_price(m["content"])
-                if min_price is not None:
-                    session["budget_min"] = min_price
-                break
-
+    # เงื่อนไขที่จำไว้เป็นของแชทที่เปิดอยู่ก่อนหน้า — ตัวตีความจะอ่านเงื่อนไขของแชทนี้จากประวัติเอง
+    session.pop("last_query", None)
     return jsonify({"ok": True, "restored": len(clean)})
 
 
@@ -1634,8 +1657,5 @@ start_warmup()
 
 
 if __name__ == "__main__":
-    if not CHROMA_DIR.exists():
-        print("ERROR: ไม่พบ chroma_db — รัน `python build_index.py` ก่อนนะ")
-    else:
-        # debug=True เปิด Werkzeug debugger ซึ่งรันโค้ดจากเบราว์เซอร์ได้ — ห้ามติดไปถึง production
-        app.run(debug=os.getenv("FLASK_DEBUG", "false").lower() == "true", port=5000)
+    # debug=True เปิด Werkzeug debugger ซึ่งรันโค้ดจากเบราว์เซอร์ได้ — ห้ามติดไปถึง production
+    app.run(debug=os.getenv("FLASK_DEBUG", "false").lower() == "true", port=5000)
